@@ -37,7 +37,15 @@ def test_old_git_sets_the_plain_file_only_if_it_exists(tmp_path: Path) -> None:
         assert _setting(repo) == ""
         (repo / ".git-blame-ignore-revs").write_text("")
         assert git_config_setup.main(repo) == 0
-    assert _setting(repo) == ".git-blame-ignore-revs"
+        assert _setting(repo) == ".git-blame-ignore-revs"
+        # Once the file is gone, the setting goes too, so blame doesn't fail.
+        (repo / ".git-blame-ignore-revs").unlink()
+        assert git_config_setup.main(repo) == 0
+        assert _setting(repo) == ""
+        # A setting this didn't make is left alone.
+        subprocess.run(["git", "config", "--local", "blame.ignoreRevsFile", "mine"], cwd=repo, check=True)
+        assert git_config_setup.main(repo) == 0
+    assert _setting(repo) == "mine"
 
 
 def test_git_version_parses_and_tolerates_odd_output() -> None:

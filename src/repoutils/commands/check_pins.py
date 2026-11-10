@@ -15,8 +15,10 @@ UV = ("astral-sh/setup-uv", "version")
 JUST = ("extractions/setup-just", "just-version")
 
 _STEP_RE = re.compile(r"^(?P<indent>\s*)- ")
-_USES_RE = re.compile(r"^\s*(?:- )?uses:\s*[\"']?(?P<action>[^@\s\"']+)@")
-_WITH_RE = re.compile(r"^(?:- )?with:\s*(?:#.*)?$")
+# A step's own `- ` marker, which YAML lets have more than one space.
+_ITEM_RE = re.compile(r"^\s*-\s+")
+_USES_RE = re.compile(r"^uses:\s*[\"']?(?P<action>[^@\s\"']+)@")
+_WITH_RE = re.compile(r"^with:\s*(?:#.*)?$")
 _JUST_MIN_RE = re.compile(r"^set minimum-version := '(?P<version>[^']+)'$", re.MULTILINE)
 # The tag, without any @sha256: digest.
 # A FROM line's flags (e.g. --platform=$BUILDPLATFORM) come before the image.
@@ -53,16 +55,34 @@ def inputs(step: list[str]) -> list[str]:
     that a key in another of the step's mappings (`env:`), or a line of a
     multi-line value (`sparse-checkout: |`), isn't taken for an input."""
     lines = [line for line in step if line.strip() and not line.strip().startswith("#")]
-    # The step's own keys sit just past its `- `, so a `with:` line deeper in
-    # (in a `run: |` script, say) isn't taken for the step's.
-    key_depth = _depth(lines[0]) + 2 if lines else 0
-    for i, line in enumerate(lines):
-        stripped = line.strip()
-        indent = _depth(line) + (2 if stripped.startswith("- ") else 0)
-        if indent == key_depth and _WITH_RE.match(stripped):
+    for i, (indent, key) in enumerate(_keys(lines)):
+        if _WITH_RE.match(key):
             mapping = list(itertools.takewhile(lambda body: _depth(body) > indent, lines[i + 1 :]))
             return [key for key in mapping if _depth(key) == _depth(mapping[0])]
     return []
+
+
+def _keys(lines: list[str]) -> list[tuple[int, str]]:
+    """Each line of a step (blanks and comments already dropped) with its
+    indent and, where it starts one of the step's own keys, that key's text, or
+    "" where it doesn't. The step's keys sit just past its `- `, so a line
+    deeper in (in a `run: |` script, say) isn't taken for one of them."""
+    if not lines:
+        return []
+    item = _ITEM_RE.match(lines[0])
+    key_depth = item.end() if item else _depth(lines[0])
+    keys = [(key_depth, lines[0][key_depth:])]
+    keys += [(_depth(line), line.strip() if _depth(line) == key_depth else "") for line in lines[1:]]
+    return keys
+
+
+def _uses(step: list[str]) -> str | None:
+    """The action a step uses, or None if it runs a script instead."""
+    lines = [line for line in step if line.strip() and not line.strip().startswith("#")]
+    for _, key in _keys(lines):
+        if match := _USES_RE.match(key):
+            return match["action"]
+    return None
 
 
 def _depth(line: str) -> int:
@@ -79,7 +99,7 @@ def pins(text: str, action: str, key: str) -> list[str | None]:
     )
     found: list[str | None] = []
     for step in steps(text):
-        if any((m := _USES_RE.match(line)) and m["action"] == action for line in step):
+        if _uses(step) == action:
             values = [
                 next(v for v in m.groups() if v is not None) for line in inputs(step) if (m := key_re.match(line))
             ]
@@ -102,7 +122,8 @@ def minimums(root: Path) -> dict[tuple[str, str], str]:
     match = _JUST_MIN_RE.search((root / "justfile").read_text())
     if match is None:
         raise ValueError("justfile has no `set minimum-version := '...'`")
-    return {UV: required.removeprefix(">="), JUST: match["version"]}
+    # The lower bound of e.g. ">=0.13.6, <0.14".
+    return {UV: required.removeprefix(">=").split(",", 1)[0].strip(), JUST: match["version"]}
 
 
 def dockerfile_problems(root: Path, uv: str) -> list[str]:

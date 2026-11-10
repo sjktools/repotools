@@ -106,7 +106,7 @@ def _wheel_filename(package_name: str, wheel: dict[str, Any]) -> str:
     location: str | None = wheel.get("url") or wheel.get("path") or wheel.get("filename")
     if location is None:
         raise ValueError(f"wheel in {package_name} has no url, path or filename")
-    return location.rsplit("/", 1)[-1]
+    return location.split("?", 1)[0].split("#", 1)[0].rsplit("/", 1)[-1]
 
 
 def _disallowed_wheels(lock: dict[str, Any], platforms: Platforms = Platforms()) -> list[tuple[str, str, str]]:

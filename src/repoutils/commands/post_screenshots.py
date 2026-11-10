@@ -149,7 +149,7 @@ def main(argv: list[str]) -> int:
             detail = e.read().decode(errors="replace")
         print(f"HTTP {e.code} from {e.filename}:\n{detail}", file=sys.stderr)
         return 1
-    except (urllib.error.URLError, TimeoutError, RuntimeError) as e:
+    except (OSError, RuntimeError) as e:
         print(e, file=sys.stderr)
         return 1
     print(f"Posted {len(paths)} screenshot(s) to PR #{args.pr}.")

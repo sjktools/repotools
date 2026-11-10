@@ -80,6 +80,15 @@ class CheckScreenshotsDirTests(TestCase):
         self.assertNotIn("isn't tracked", stdout)
         self.assertIn("- screenshots/.gitignore is missing from the working tree", stdout)
 
+    def test_leading_space_in_a_rule_fails(self) -> None:
+        # Git keeps a leading space as part of the pattern, so " *" ignores nothing here.
+        def setup(path: Path) -> None:
+            (path / "screenshots" / ".gitignore").write_text(" *\n!/.gitignore\n")
+
+        code, stdout = self._run(setup)
+        self.assertEqual(code, 1)
+        self.assertIn("unexpected contents in the working tree", stdout)
+
     def test_modified_gitignore_fails(self) -> None:
         def setup(path: Path) -> None:
             (path / "screenshots" / ".gitignore").write_text("*.png\n")

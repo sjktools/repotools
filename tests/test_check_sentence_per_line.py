@@ -41,6 +41,7 @@ class CheckSentencePerLineTests(TestCase):
             > 1. Quoted ordered marker is ignored.
             A word like fetc. Is not an abbreviation.
             Capitalised E.g. Still an abbreviation.
+            “Curly quotes.” Another sentence.
             """)
         self.assertEqual(
             sentence_per_line_problems(text),
@@ -51,6 +52,7 @@ class CheckSentencePerLineTests(TestCase):
                 (19, "Done. `Code` starts this one."),
                 (20, "A stray ` backtick. Another sentence."),
                 (28, "A word like fetc. Is not an abbreviation."),
+                (30, "“Curly quotes.” Another sentence."),
             ],
         )
 

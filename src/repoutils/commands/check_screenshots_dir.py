@@ -35,7 +35,8 @@ def _git(*args: str) -> bytes:
 
 def _ignores_all_but_itself(contents: bytes) -> bool:
     """Whether a .gitignore's rules, ignoring comments and blank lines, are exactly RULES."""
-    lines = [line.strip() for line in contents.decode("utf-8", errors="replace").splitlines()]
+    # Git ignores trailing spaces, but a leading one is part of the pattern.
+    lines = [line.rstrip() for line in contents.decode("utf-8", errors="replace").splitlines()]
     return [line for line in lines if line and not line.startswith("#")] == RULES
 
 

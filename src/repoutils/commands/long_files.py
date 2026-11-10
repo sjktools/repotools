@@ -13,7 +13,6 @@ import fnmatch
 import os
 import subprocess
 import sys
-import tomllib
 import urllib.error
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -75,12 +74,7 @@ def load_config(pyproject: Path) -> Config:
     """[tool.repoutils.long-files] from pyproject, raising ValueError if it's
     malformed. Every setting is optional: by default every tracked *.py file
     has a limit of 500 lines."""
-    table: object = {}
-    if pyproject.is_file():
-        with pyproject.open("rb") as f:
-            table = tomllib.load(f).get("tool", {}).get("repoutils", {}).get("long-files", {})
-    if not isinstance(table, dict):
-        raise ValueError(f"{TABLE} must be a table")
+    table = repoutils_config.section("long-files", pyproject.parent) if pyproject.is_file() else {}
     include, exclude = table.get("include", ["*.py"]), table.get("exclude", [])
     limit, limits = table.get("limit", 500), table.get("limits", {})
     policy = table.get("policy", POLICY)
@@ -173,7 +167,8 @@ def _table(files: list[LongFile], *, default_limit: int, show_base: bool, link: 
     header = ["File", "Lines"] + (["Limit"] if show_limit else [])
     rows = ["| " + " | ".join(header) + " |", "| --- |" + " ---: |" * (len(header) - 1)]
     for f in files:
-        name = f"[`{f.path}`]({link}/{f.path})" if link else f"`{f.path}`"
+        # A `|`, even in a code span, would end the table cell.
+        name = (f"[`{f.path}`]({link}/{f.path})" if link else f"`{f.path}`").replace("|", r"\|")
         lines = str(f.lines)
         if show_base:
             lines = f"{'new' if f.base_lines is None else f.base_lines} → {f.lines}"

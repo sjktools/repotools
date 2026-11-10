@@ -19,7 +19,7 @@ ABBREVIATIONS = ("e.g.", "i.e.", "etc.")
 ABBREVIATION_RE = re.compile(r"(?<![\w.])(?:" + "|".join(map(re.escape, ABBREVIATIONS)) + r")$", re.IGNORECASE)
 # An ordered-list marker, optionally after bullet or blockquote markers (e.g. "- 1." or "> 1.").
 LIST_MARKER_RE = re.compile(r"\s*(?:[-*+>]\s*)*\d+\.")
-BOUNDARY_RE = re.compile(r'[.!?][)"*_]*[ \t]+[A-Z`\[\(\*]')
+BOUNDARY_RE = re.compile(r'[.!?][)"*_’”]*[ \t]+[A-Z`“‘\[\(\*]')
 # A code span: a run of backticks, then the shortest text up to a run of the same length; an unmatched run is literal.
 INLINE_CODE_RE = re.compile(r"(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)")
 

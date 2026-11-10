@@ -110,6 +110,13 @@ def base_ci_state(repo: str, sha: str, check_name: str, token: str | None, timeo
     return ("succeeded" if conclusion == "success" else "failed"), f"{check_name} {conclusion}"
 
 
+def _positive(value: str) -> float:
+    seconds = float(value)
+    if not seconds > 0:
+        raise argparse.ArgumentTypeError(f"must be positive, not {value}")
+    return seconds
+
+
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="repoutils wait-for-base-coverage", description=__doc__.splitlines()[0])
     parser.add_argument("repo", help="the repository, as owner/name")
@@ -133,7 +140,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--interval",
-        type=float,
+        type=_positive,
         default=10,
         help="seconds between attempts (default: %(default)s)",
     )

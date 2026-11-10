@@ -250,3 +250,10 @@ class WaitForBaseCoverageTests(TestCase):
             )
         self.assertEqual(code, 0)
         self.assertEqual(timeouts, [15, 15, 11, 7, 2, 1])
+
+    def test_rejects_a_non_positive_interval(self) -> None:
+        for interval in ("0", "-1"):
+            with self.subTest(interval=interval), contextlib.redirect_stderr(io.StringIO()) as err:
+                with self.assertRaises(SystemExit):
+                    wait_for_base_coverage_main([self.REPO, self.SHA, "--interval", interval])
+                self.assertIn("must be positive", err.getvalue())

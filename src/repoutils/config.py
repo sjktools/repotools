@@ -22,7 +22,10 @@ def load(root: Path = Path()) -> dict[str, Any]:
     if not path.is_file():
         return {}
     with path.open("rb") as f:
-        table = tomllib.load(f).get("tool", {}).get("repoutils", {})
+        tool = tomllib.load(f).get("tool", {})
+    if not isinstance(tool, dict):
+        raise ConfigError(f"{path}: [tool] must be a table")
+    table = tool.get("repoutils", {})
     if not isinstance(table, dict):
         raise ConfigError(f"{path}: [tool.repoutils] must be a table")
     return table

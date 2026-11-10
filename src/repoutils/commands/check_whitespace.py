@@ -6,6 +6,7 @@ newline at the end of a non-empty file (none in an empty one).
 """
 
 import argparse
+import os
 import subprocess
 from pathlib import Path
 
@@ -20,16 +21,16 @@ def _text_files() -> list[str]:
         ["git", "ls-files", "-z", "--eol"],
         check=True,
         capture_output=True,
-        text=True,
     ).stdout
     paths = []
-    for entry in out.split("\0"):
+    for entry in out.split(b"\0"):
         if not entry:
             continue
-        info, path = entry.split("\t", 1)
-        worktree_eol = info.split()[1].removeprefix("w/")
+        info, path = entry.split(b"\t", 1)
+        worktree_eol = info.split()[1].decode().removeprefix("w/")
         if worktree_eol and worktree_eol != "-text":
-            paths.append(path)
+            # A path needn't be UTF-8; fsdecode keeps its bytes, so it still opens.
+            paths.append(os.fsdecode(path))
     return paths
 
 

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from repoutils.commands.check_pins import main, pins, steps
+from repoutils.commands.check_pins import UV, main, minimums, pins, steps
 
 WORKFLOW = """\
 jobs:
@@ -85,6 +85,22 @@ steps:
     assert pins(workflow, "astral-sh/setup-uv", "version") == ["0.13.6"]
 
 
+def test_pins_reads_only_a_steps_own_uses_and_wider_item_markers() -> None:
+    # A `uses:` line in a script isn't the step's action, and YAML allows more
+    # than one space after a step's `-`.
+    workflow = """\
+steps:
+  - run: |
+      uses: astral-sh/setup-uv@v6
+  -   uses: astral-sh/setup-uv@v6
+      with:
+        version: "0.13.6"
+  -  name: Unpinned
+     uses: astral-sh/setup-uv@v6
+"""
+    assert pins(workflow, "astral-sh/setup-uv", "version") == ["0.13.6", None]
+
+
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     (tmp_path / "pyproject.toml").write_text('[tool.uv]\nrequired-version = ">=0.13.6"\n')
@@ -161,7 +177,8 @@ def test_main_rejects_unexpected_minimums(repo: Path) -> None:
     (repo / "pyproject.toml").write_text('[tool.uv]\nrequired-version = "==0.13.6"\n')
     with pytest.raises(ValueError, match="isn't of the form"):
         main(repo)
-    (repo / "pyproject.toml").write_text('[tool.uv]\nrequired-version = ">=0.13.6"\n')
+    (repo / "pyproject.toml").write_text('[tool.uv]\nrequired-version = ">=0.13.6, <0.14"\n')
+    assert minimums(repo)[UV] == "0.13.6"
     (repo / "justfile").write_text("default:\n")
     with pytest.raises(ValueError, match="no `set minimum-version"):
         main(repo)

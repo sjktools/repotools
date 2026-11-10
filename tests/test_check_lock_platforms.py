@@ -123,6 +123,13 @@ class ValidateUvLockOsArchTests(TestCase):
         self.assertIn("(manylinux_2_17_s390x)", stdout)
         self.assertNotIn("any.whl", stdout)
 
+    def test_url_query_and_fragment_ignored(self) -> None:
+        code, stdout = self._run_wheels(
+            'url = "https://example.com/pkg-1.0-py3-none-any.whl?sig=x"',
+            'url = "https://example.com/pkg-1.0-cp314-cp314-macosx_11_0_arm64.whl#sha256=00"',
+        )
+        self.assertEqual(code, 0, stdout)
+
     def test_wheel_without_location_rejected(self) -> None:
         with self.assertRaisesRegex(ValueError, "no url, path or filename"):
             self._run_wheels('hash = "sha256:00"')

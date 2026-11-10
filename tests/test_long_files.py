@@ -204,6 +204,10 @@ class RenderTests(TestCase):
         self.assertIn("Counted at abc123.", body)
         self.assertIn("<details><summary>Files (1)</summary>", body)
 
+    def test_pipe_in_a_path_is_escaped(self) -> None:
+        report = Report(changed=[], unchanged=[LongFile("a|b.py", 30, 10)], default_limit=10)
+        self.assertIn("| `a\\|b.py` | 30 |", render(report, base=None, commit=None, repo=None))
+
     def test_limit_column_when_a_limit_differs(self) -> None:
         report = Report(changed=[], unchanged=[LongFile("t.py", 30, 20), LongFile("d.py", 12, 10)], default_limit=10)
         body = render(report, base=None, commit=None, repo=None)

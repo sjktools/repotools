@@ -36,6 +36,7 @@ def test_reads_settings(tmp_path: Path) -> None:
     ("text", "call", "message"),
     [
         ("[tool]\nrepoutils = 1\n", lambda root: config.load(root), "must be a table"),
+        ("tool = 1\n", lambda root: config.load(root), r"\[tool\] must be a table"),
         ("[tool.repoutils]\nlong-files = 1\n", lambda root: config.section("long-files", root), "must be a table"),
         ("[tool.repoutils]\ncomment-prefix = ''\n", lambda root: config.comment_prefix(root), "comment-prefix"),
         ("[tool.repoutils]\ncomment-prefix = 'a-->'\n", lambda root: config.comment_prefix(root), "comment-prefix"),

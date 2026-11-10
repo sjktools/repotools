@@ -34,12 +34,16 @@ def git_version() -> tuple[int, int]:
     return (int(m[1]), int(m[2])) if m else (0, 0)
 
 
-def ensure_setting(toplevel: Path, name: str, value: str) -> bool:
-    """Set a local config setting unless it already has value; returns whether it changed."""
+def _current(toplevel: Path, name: str) -> str | None:
     current = _git("config", "--get", "--local", name, cwd=toplevel)
     if current.returncode not in (0, 1):
         raise RuntimeError(f"git config --get {name} failed:\n{current.stderr}")
-    if current.stdout.rstrip("\n") == value:
+    return current.stdout.rstrip("\n") if current.returncode == 0 else None
+
+
+def ensure_setting(toplevel: Path, name: str, value: str) -> bool:
+    """Set a local config setting unless it already has value; returns whether it changed."""
+    if _current(toplevel, name) == value:
         return False
     subprocess.run(["git", "config", "--local", name, value], cwd=toplevel, check=True)
     print(f"INFO: Updated local repo git config setting '{name}' to '{value}'", file=sys.stderr)
@@ -55,6 +59,11 @@ def main(cwd: Path = Path()) -> int:
         ensure_setting(root, "blame.ignoreRevsFile", f":(optional){IGNORE_REVS}")
     elif (root / IGNORE_REVS).is_file():
         ensure_setting(root, "blame.ignoreRevsFile", IGNORE_REVS)
+    elif _current(root, "blame.ignoreRevsFile") in (IGNORE_REVS, f":(optional){IGNORE_REVS}"):
+        # Older Git's blame fails on a missing file, so drop the setting this
+        # set when the file existed (or a newer Git did).
+        subprocess.run(["git", "config", "--local", "--unset", "blame.ignoreRevsFile"], cwd=root, check=True)
+        print("INFO: Unset local repo git config setting 'blame.ignoreRevsFile'", file=sys.stderr)
     return 0
 
 

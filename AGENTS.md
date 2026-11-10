@@ -31,7 +31,7 @@ A command that posts a PR comment finds its earlier comment by a hidden marker, 
 ## Commands
 
 CI (`.github/workflows/ci.yml`) delegates each step to the `justfile`; run `just ci` to run everything CI's test, build and coverage jobs run, or `just --list` for the recipes.
-`just check` runs every check without fixing anything; `just fix` reformats and applies lint autofixes.
+`just check` runs every check except `lock-check` (which `just ci` runs first) without fixing anything; `just fix` reformats and applies lint autofixes.
 `just test` runs the tests, and `just coverage` runs them with a coverage report and writes `coverage.xml` and `junit.xml`.
 Before opening a PR, run `just patch-coverage` too, which reports the changed lines the tests miss, and cover them where a test is worth it.
 
@@ -53,7 +53,7 @@ On Dependabot PRs, its `dependabot-fix` job re-locks with our uv and syncs the d
 
 Releases are cut from `main`: the Bump Version workflow opens a PR bumping `version` in `pyproject.toml`; once it merges, `ci.yml`'s `release` job tags `v<version>` and creates a GitHub release (with the `GH_ACTIONS_TOKEN` secret, so the tag push triggers the Publish workflow).
 `publish-pypi.yml` then builds once, publishes to TestPyPI, checks the release installs from there, and only then publishes the same files to PyPI, with PEP 740 attestations, through trusted publishing (no API token), and checks it installs from PyPI.
-Commenting just `/testpypi` on a PR from this repository publishes a dev build of its branch to TestPyPI only.
+The repository owner, or an organization member, commenting just `/testpypi` on an open PR from this repository publishes a dev build of its branch to TestPyPI only.
 
 `claude.yml` and `claude-code-review.yml` run Claude Code when a comment starts with `@claude` (with the `CLAUDE_CODE_OAUTH_TOKEN` secret); their `route` jobs run `repoutils claude-route` from a sparse checkout of `src/repoutils/` with the runner's `python3`, installing nothing.
-Commenting just `/autofix` on a PR runs `just fix` on its branch and pushes the result (with the `AUTOFIX_TOKEN` secret).
+The repository owner, or an organization member, commenting just `/autofix` on an open PR from this repository runs `just fix` on its branch and pushes the result (with the `AUTOFIX_TOKEN` secret).

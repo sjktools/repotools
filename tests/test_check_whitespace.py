@@ -1,9 +1,11 @@
 import contextlib
 import io
+import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
-from unittest import TestCase
+from unittest import TestCase, skipIf
 
 from repoutils.commands.check_whitespace import _problems
 from repoutils.commands.check_whitespace import main as whitespace_main
@@ -60,6 +62,23 @@ class CheckWhitespaceTests(TestCase):
         )
         self.assertEqual(code, 0)
         self.assertIn("clean whitespace", stdout)
+
+    @skipIf(sys.platform == "darwin", "macOS file systems only allow UTF-8 file names")
+    def test_non_utf8_path(self) -> None:
+        code, stdout = self._run_bytes_name(b"caf\xe9.txt", b"bad \n")
+        self.assertEqual(code, 1)
+        self.assertIn(":1: trailing whitespace", stdout)
+
+    def _run_bytes_name(self, name: bytes, data: bytes) -> tuple[int, str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)
+            (path / os.fsdecode(name)).write_bytes(data)
+            subprocess.run(["git", "init", "-q"], cwd=path, check=True)
+            subprocess.run(["git", "add", "-A"], cwd=path, check=True)
+            stdout = io.StringIO()
+            with contextlib.chdir(path), contextlib.redirect_stdout(stdout):
+                code = whitespace_main()
+        return code, stdout.getvalue()
 
     def test_problems_reported_and_binary_skipped(self) -> None:
         code, stdout = self._run(
