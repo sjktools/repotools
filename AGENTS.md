@@ -49,8 +49,7 @@ CI's `actions-lock` job verifies it.
 
 `ci.yml` runs the tests on Linux and macOS for each supported Python version, then `just check`, the build and a smoke test of the wheel, coverage (uploaded to Codecov, with the `CODECOV_TOKEN` secret) and, on PRs from this repository, posts the patch coverage and long files reports as PR comments.
 Windows isn't supported for development, as `[tool.uv] environments` leaves it out of `uv.lock`; repoutils itself is pure Python.
-On Dependabot PRs, its `dependabot-fix` job re-locks with our uv and syncs the dependency minimums, and its `dependabot-push` job pushes the result with the `DEPENDABOT_FIX_TOKEN` secret (a Dependabot secret with contents write), so the push triggers CI.
-A job that runs a branch's code never references a write-capable token, as code from an earlier step could read it from a later one: it hands its commits to a separate push job, which runs nothing from the branch, as a Git bundle artifact (`fix.yml` does the same).
+On Dependabot PRs, its `dependabot-fix` job re-locks with our uv and syncs the dependency minimums, pushing with the `DEPENDABOT_FIX_TOKEN` secret (a Dependabot secret with contents write), so the push triggers CI.
 
 Releases are cut from `main`: the Bump Version workflow opens a PR bumping `version` in `pyproject.toml`; once it merges, `ci.yml`'s `release` job tags `v<version>` and creates a GitHub release (with the `GH_ACTIONS_TOKEN` secret, so the tag push triggers the Publish workflow).
 `publish-pypi.yml` then builds once, publishes to TestPyPI, checks the release installs from there, and only then publishes the same files to PyPI, with PEP 740 attestations, through trusted publishing (no API token), and checks it installs from PyPI.
