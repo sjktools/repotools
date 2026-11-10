@@ -1,13 +1,13 @@
 [project]
-name = "repotools"
+name = "repoutils"
 version = "0.1.0"
 description = "Repository tooling for Python projects that use uv, just and GitHub Actions"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
-# Deliberately none: projects run repotools in CI jobs that hold write-capable
-# tokens or check out untrusted Dependabot branches, installing repotools alone
-# (`uv run --only-group repotools`), so it must stay standard library only.
+# Deliberately none: projects run repoutils in CI jobs that hold write-capable
+# tokens or check out untrusted Dependabot branches, installing repoutils alone
+# (`uv run --only-group repoutils`), so it must stay standard library only.
 dependencies = []
 classifiers = [
     "Natural Language :: English",
@@ -21,7 +21,7 @@ classifiers = [
 Repository = "https://github.com/sjktools/repotools"
 
 [project.scripts]
-repotools = "repotools.cli:main"
+repoutils = "repoutils.cli:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -39,11 +39,11 @@ dev = [
     "ruff>=0.17.4",
 ]
 
-# repotools' own settings for repotools (it dogfoods its checks).
-[tool.repotools]
+# repoutils' own settings for repoutils (it dogfoods its checks).
+[tool.repoutils]
 default-branch = "main"
 
-[tool.repotools.long-files]
+[tool.repoutils.long-files]
 include = ["*.py"]
 limit = 500
 
@@ -52,8 +52,8 @@ limit = 500
 [tool.uv]
 required-version = ">=0.13.6"
 # Development (the dev group's wheels in uv.lock) is supported on macOS and
-# Linux x86_64/aarch64 only; repotools itself is pure Python and runs anywhere.
-# `repotools check-lock-platforms` checks uv.lock keeps to these.
+# Linux x86_64/aarch64 only; repoutils itself is pure Python and runs anywhere.
+# `repoutils check-lock-platforms` checks uv.lock keeps to these.
 environments = [
     "sys_platform == 'darwin'",
     "sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')",
@@ -93,7 +93,7 @@ filterwarnings = ["error"]
 addopts = "-n auto"
 
 [tool.coverage.run]
-source = ["repotools"]
+source = ["repoutils"]
 branch = true
 
 [tool.coverage.report]

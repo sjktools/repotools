@@ -3,7 +3,7 @@ earlier run posted.
 
 Each comment starts with a hidden marker, ``<!-- <comment-prefix>-<name> -->``,
 where ``name`` is ``--name`` and ``comment-prefix`` comes from
-``[tool.repotools]`` (default ``repotools``), so the next run can find it. By
+``[tool.repoutils]`` (default ``repoutils``), so the next run can find it. By
 default the next run edits that comment in place; with ``--hide-previous`` it
 posts a new comment and hides the earlier ones as outdated instead, which suits
 reports whose history is worth keeping, such as exolot's findings.
@@ -18,8 +18,8 @@ import sys
 import urllib.error
 from pathlib import Path
 
-from repotools import config
-from repotools import github as github_comments
+from repoutils import config
+from repoutils import github as github_comments
 
 
 def _post(args: argparse.Namespace, marker: str) -> str:
@@ -47,7 +47,7 @@ def _post(args: argparse.Namespace, marker: str) -> str:
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
-        prog="repotools post-comment",
+        prog="repoutils post-comment",
         description=__doc__.splitlines()[0] + " " + __doc__.splitlines()[1],
         epilog="Comments with $GITHUB_TOKEN, defaulting to `gh auth token`.",
     )

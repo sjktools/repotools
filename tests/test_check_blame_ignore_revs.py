@@ -5,8 +5,8 @@ import tempfile
 from pathlib import Path
 from unittest import TestCase, mock
 
-from repotools.commands import check_blame_ignore_revs
-from repotools.commands.check_blame_ignore_revs import main as blame_ignore_revs_main
+from repoutils.commands import check_blame_ignore_revs
+from repoutils.commands.check_blame_ignore_revs import main as blame_ignore_revs_main
 
 
 class CheckBlameIgnoreRevsTests(TestCase):

@@ -64,6 +64,6 @@ def main(target: str = "HEAD") -> int:
 
 
 def run(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(prog="repotools check-blame-ignore-revs", description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(prog="repoutils check-blame-ignore-revs", description=__doc__.splitlines()[0])
     parser.add_argument("target", nargs="?", default="HEAD", help="the commit every entry must be an ancestor of")
     return main(parser.parse_args(argv).target)

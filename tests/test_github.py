@@ -7,10 +7,10 @@ from email.message import Message
 from typing import Any, override
 from unittest import TestCase, mock
 
-from repotools.github import request as github_request
+from repoutils.github import request as github_request
 
 # What request() opens URLs with; wait_for_base_coverage's tests use it too.
-NO_REDIRECT_OPEN = "repotools.github.no_redirect_opener.open"
+NO_REDIRECT_OPEN = "repoutils.github.no_redirect_opener.open"
 
 
 class GitHubCommentsRequestTests(TestCase):

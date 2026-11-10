@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from repotools.commands.check_attestations import main
+from repoutils.commands.check_attestations import main
 
 WHEEL = "exolot-1.0-py3-none-any.whl"
 SDIST = "exolot-1.0.tar.gz"

@@ -2,7 +2,7 @@
 optionally post it to a PR as a comment, editing the one posted before.
 
 The files, limits and the policy the report starts with come from
-pyproject.toml's [tool.repotools.long-files] (all optional).
+pyproject.toml's [tool.repoutils.long-files] (all optional).
 Files the PR changes (compared with the merge base of --base and HEAD) come
 first, with their line counts on the base too, so a PR's report shows whether
 it made a file longer or shorter. Stdlib-only, as CI runs it with a
@@ -20,20 +20,20 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeGuard
 
-from repotools import config as repotools_config
-from repotools import github as github_comments
+from repoutils import config as repoutils_config
+from repoutils import github as github_comments
 
 # Marks the comment this posts, so the next run can find and edit it. This is
 # the marker with the default comment-prefix; main() uses the configured one.
 MARKER_NAME = "long-files"
-MARKER = f"<!-- {repotools_config.DEFAULT_COMMENT_PREFIX}-{MARKER_NAME} -->"
+MARKER = f"<!-- {repoutils_config.DEFAULT_COMMENT_PREFIX}-{MARKER_NAME} -->"
 
 POLICY = (
     "**For information only.** We aim for files under the limit, but only split one where splitting makes the "
     "code better, e.g. moving out a cohesive piece that has no reason to sit there, not just to get under the "
     "number. A long file that is already one cohesive unit can stay as it is, and needs no reply or explanation."
 )
-TABLE = "[tool.repotools.long-files]"
+TABLE = "[tool.repoutils.long-files]"
 
 
 @dataclass(frozen=True)
@@ -72,13 +72,13 @@ class Report:
 
 
 def load_config(pyproject: Path) -> Config:
-    """[tool.repotools.long-files] from pyproject, raising ValueError if it's
+    """[tool.repoutils.long-files] from pyproject, raising ValueError if it's
     malformed. Every setting is optional: by default every tracked *.py file
     has a limit of 500 lines."""
     table: object = {}
     if pyproject.is_file():
         with pyproject.open("rb") as f:
-            table = tomllib.load(f).get("tool", {}).get("repotools", {}).get("long-files", {})
+            table = tomllib.load(f).get("tool", {}).get("repoutils", {}).get("long-files", {})
     if not isinstance(table, dict):
         raise ValueError(f"{TABLE} must be a table")
     include, exclude = table.get("include", ["*.py"]), table.get("exclude", [])
@@ -257,14 +257,14 @@ def _post(args: argparse.Namespace, repo: str, report: Report, body: str, marker
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
-        prog="repotools long-files",
+        prog="repoutils long-files",
         description=__doc__.splitlines()[0],
         epilog="Prints the report, or with --post comments it with $GITHUB_TOKEN (default `gh auth token`).",
     )
     parser.add_argument(
         "--base",
         help="branch whose merge base with HEAD the changed files are compared with (default: "
-        "origin/$GITHUB_BASE_REF, else origin/ and [tool.repotools] default-branch; empty for no comparison)",
+        "origin/$GITHUB_BASE_REF, else origin/ and [tool.repoutils] default-branch; empty for no comparison)",
     )
     parser.add_argument(
         "--commit",
@@ -288,7 +288,7 @@ def main(argv: list[str]) -> int:
     try:
         config = load_config(cwd / "pyproject.toml")
         if args.base is None:
-            args.base = f"origin/{os.environ.get('GITHUB_BASE_REF') or repotools_config.default_branch(cwd)}"
+            args.base = f"origin/{os.environ.get('GITHUB_BASE_REF') or repoutils_config.default_branch(cwd)}"
         report = find_long_files(cwd, config, args.base or None)
         commit = args.commit or _git(cwd, "rev-parse", "HEAD").strip()
         repo = args.repo
@@ -299,7 +299,7 @@ def main(argv: list[str]) -> int:
             print(body, end="")
         else:
             assert repo
-            _post(args, repo, report, body, repotools_config.marker(MARKER_NAME, cwd))
+            _post(args, repo, report, body, repoutils_config.marker(MARKER_NAME, cwd))
     except subprocess.CalledProcessError as e:
         stderr = e.stderr.decode(errors="replace") if isinstance(e.stderr, bytes) else e.stderr
         print(f"{' '.join(e.cmd)} failed:\n{stderr}", file=sys.stderr)

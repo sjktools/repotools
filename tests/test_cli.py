@@ -1,4 +1,4 @@
-"""Runs each command through ``repotools <command>``, with arguments for which
+"""Runs each command through ``repoutils <command>``, with arguments for which
 it returns rather than exits, and which need no network and change nothing, so
 every command's ``run()`` is covered and a mistake in it (e.g. dropping the
 exit code) fails a test."""
@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from repotools import cli
+from repoutils import cli
 
 ROOT = Path(__file__).parents[1]
 
@@ -28,7 +28,7 @@ def test_help_lists_every_command_by_group(capsys: pytest.CaptureFixture[str]) -
 
 def test_no_arguments_is_a_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main([]) == 2
-    assert "usage: repotools <command>" in capsys.readouterr().out
+    assert "usage: repoutils <command>" in capsys.readouterr().out
 
 
 def test_unknown_command(capsys: pytest.CaptureFixture[str]) -> None:
@@ -38,7 +38,7 @@ def test_unknown_command(capsys: pytest.CaptureFixture[str]) -> None:
 
 def test_version(capsys: pytest.CaptureFixture[str]) -> None:
     assert cli.main(["--version"]) == 0
-    assert capsys.readouterr().out.startswith("repotools ")
+    assert capsys.readouterr().out.startswith("repoutils ")
 
 
 def test_every_command_module_has_run() -> None:
@@ -51,14 +51,14 @@ def test_every_command_has_help(name: str, capsys: pytest.CaptureFixture[str]) -
     with pytest.raises(SystemExit) as exit_info:
         cli.main([name, "--help"])
     assert exit_info.value.code == 0
-    assert f"usage: repotools {name}" in capsys.readouterr().out
+    assert f"usage: repoutils {name}" in capsys.readouterr().out
 
 
 def test_python_dash_m(tmp_path: Path) -> None:
     result = subprocess.run(
-        [sys.executable, "-m", "repotools", "--version"], capture_output=True, text=True, check=False, cwd=tmp_path
+        [sys.executable, "-m", "repoutils", "--version"], capture_output=True, text=True, check=False, cwd=tmp_path
     )
-    assert (result.returncode, result.stdout.split()[0]) == (0, "repotools")
+    assert (result.returncode, result.stdout.split()[0]) == (0, "repoutils")
 
 
 @pytest.mark.parametrize(

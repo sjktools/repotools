@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   # Decides whether the comment or review asks for "@claude review" (it must
-  # start with it), by the rule in `repotools claude-route`, which
+  # start with it), by the rule in `repoutils claude-route`, which
   # claude.yml shares, so each request goes to exactly one of the two workflows.
   # Workflow expressions have no regex, hence a job. On a self-test it runs too,
   # with no text, so the self-test covers it.
@@ -55,11 +55,11 @@ jobs:
     outputs:
       kind: ${{ steps.route.outputs.kind }}
     steps:
-      - name: Checkout repotools' source
+      - name: Checkout repoutils' source
         uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: src/repotools/
+          sparse-checkout: src/repoutils/
           sparse-checkout-cone-mode: false
 
       - name: Route
@@ -67,7 +67,7 @@ jobs:
         env:
           TEXT: ${{ github.event.comment.body || github.event.review.body }}
         run: |
-          kind=$(printf '%s' "$TEXT" | PYTHONPATH=src python3 -m repotools claude-route)
+          kind=$(printf '%s' "$TEXT" | PYTHONPATH=src python3 -m repoutils claude-route)
           echo "kind=$kind" >> "$GITHUB_OUTPUT"
 
   claude-review:

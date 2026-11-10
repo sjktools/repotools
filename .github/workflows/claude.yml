@@ -26,7 +26,7 @@ jobs:
   # Decides whether a comment, review or new issue's body is a request to
   # @claude at all (it must start with "@claude"; an issue's title never
   # counts), and whether it asks for "@claude review", by the rule in
-  # `repotools claude-route`, which claude-code-review.yml shares;
+  # `repoutils claude-route`, which claude-code-review.yml shares;
   # review requests on PRs go there instead. Workflow expressions have no
   # regex, hence a job. On a self-test it runs too, with no text, so the
   # self-test covers it.
@@ -46,11 +46,11 @@ jobs:
     outputs:
       kind: ${{ steps.route.outputs.kind }}
     steps:
-      - name: Checkout repotools' source
+      - name: Checkout repoutils' source
         uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: src/repotools/
+          sparse-checkout: src/repoutils/
           sparse-checkout-cone-mode: false
 
       - name: Route
@@ -58,7 +58,7 @@ jobs:
         env:
           TEXT: ${{ github.event.comment.body || github.event.review.body || github.event.issue.body }}
         run: |
-          kind=$(printf '%s' "$TEXT" | PYTHONPATH=src python3 -m repotools claude-route)
+          kind=$(printf '%s' "$TEXT" | PYTHONPATH=src python3 -m repoutils claude-route)
           echo "kind=$kind" >> "$GITHUB_OUTPUT"
 
   claude:

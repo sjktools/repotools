@@ -70,5 +70,5 @@ def main() -> int:
 
 
 def run(argv: list[str]) -> int:
-    argparse.ArgumentParser(prog="repotools check-whitespace", description=__doc__.splitlines()[0]).parse_args(argv)
+    argparse.ArgumentParser(prog="repoutils check-whitespace", description=__doc__.splitlines()[0]).parse_args(argv)
     return main()

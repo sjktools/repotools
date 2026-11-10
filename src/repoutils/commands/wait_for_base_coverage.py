@@ -35,7 +35,7 @@ import urllib.parse
 import urllib.request
 from collections.abc import Callable
 
-from repotools.github import no_redirect_opener
+from repoutils.github import no_redirect_opener
 
 CODECOV_API = "https://api.codecov.io/api/v2/github"
 GITHUB_API = "https://api.github.com"
@@ -111,7 +111,7 @@ def base_ci_state(repo: str, sha: str, check_name: str, token: str | None, timeo
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(prog="repotools wait-for-base-coverage", description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(prog="repoutils wait-for-base-coverage", description=__doc__.splitlines()[0])
     parser.add_argument("repo", help="the repository, as owner/name")
     parser.add_argument("sha", help="the PR's base commit")
     parser.add_argument(

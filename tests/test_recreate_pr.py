@@ -5,8 +5,8 @@ import subprocess
 from typing import Any
 from unittest import TestCase, mock
 
-from repotools.commands.recreate_pr import main as recreate_pr_main
-from repotools.commands.recreate_pr import parse_pr_url
+from repoutils.commands.recreate_pr import main as recreate_pr_main
+from repoutils.commands.recreate_pr import parse_pr_url
 
 
 class RecreatePrTests(TestCase):
@@ -62,7 +62,7 @@ class RecreatePrTests(TestCase):
         err = io.StringIO()
         code = None
         with (
-            mock.patch("repotools.commands.recreate_pr.subprocess.run", side_effect=fake_run),
+            mock.patch("repoutils.commands.recreate_pr.subprocess.run", side_effect=fake_run),
             contextlib.redirect_stderr(err),
             contextlib.redirect_stdout(io.StringIO()),
         ):
@@ -165,7 +165,7 @@ class RecreatePrTests(TestCase):
     def test_gh_missing(self) -> None:
         err = io.StringIO()
         with (
-            mock.patch("repotools.commands.recreate_pr.subprocess.run", side_effect=FileNotFoundError),
+            mock.patch("repoutils.commands.recreate_pr.subprocess.run", side_effect=FileNotFoundError),
             contextlib.redirect_stderr(err),
             self.assertRaises(SystemExit),
         ):
@@ -176,7 +176,7 @@ class RecreatePrTests(TestCase):
         error = subprocess.CalledProcessError(1, ["gh"], stderr="boom")
         err = io.StringIO()
         with (
-            mock.patch("repotools.commands.recreate_pr.subprocess.run", side_effect=error),
+            mock.patch("repoutils.commands.recreate_pr.subprocess.run", side_effect=error),
             contextlib.redirect_stderr(err),
             self.assertRaises(SystemExit),
         ):

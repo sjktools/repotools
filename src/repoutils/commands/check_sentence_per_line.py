@@ -1,6 +1,6 @@
 """Check that Markdown files stay one sentence per line.
 
-The files are ``[tool.repotools.sentence-per-line]``'s ``files`` (default
+The files are ``[tool.repoutils.sentence-per-line]``'s ``files`` (default
 ``AGENTS.md`` and ``README.md``); a missing one is skipped.
 
 Outside code fences, tables, headings and HTML lines, this flags sentence
@@ -11,7 +11,7 @@ import argparse
 import re
 from pathlib import Path
 
-from repotools import config
+from repoutils import config
 
 DEFAULT_FILES = ["AGENTS.md", "README.md"]
 ABBREVIATIONS = ("e.g.", "i.e.", "etc.")
@@ -84,7 +84,7 @@ def _problems(text: str) -> list[tuple[int, str]]:
 def files() -> list[str]:
     """The files to check, from config."""
     table = config.section("sentence-per-line")
-    return config.string_list(table, "files", DEFAULT_FILES, "[tool.repotools.sentence-per-line]")
+    return config.string_list(table, "files", DEFAULT_FILES, "[tool.repoutils.sentence-per-line]")
 
 
 def main() -> int:
@@ -103,7 +103,7 @@ def main() -> int:
 
 
 def run(argv: list[str]) -> int:
-    argparse.ArgumentParser(prog="repotools check-sentence-per-line", description=__doc__.splitlines()[0]).parse_args(
+    argparse.ArgumentParser(prog="repoutils check-sentence-per-line", description=__doc__.splitlines()[0]).parse_args(
         argv
     )
     return main()

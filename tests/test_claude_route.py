@@ -3,7 +3,7 @@ import sys
 
 import pytest
 
-from repotools.commands.claude_route import classify, main
+from repoutils.commands.claude_route import classify, main
 
 
 @pytest.mark.parametrize(

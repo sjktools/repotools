@@ -5,7 +5,7 @@ import textwrap
 from pathlib import Path
 from unittest import TestCase
 
-from repotools.commands.requirements_min_versions import main
+from repoutils.commands.requirements_min_versions import main
 
 
 def _lock(*packages: tuple[str, str]) -> str:

@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Any
 from unittest import TestCase, mock
 
-from repotools.commands.post_screenshots import MARKER
-from repotools.commands.post_screenshots import main as post_screenshots_main
+from repoutils.commands.post_screenshots import MARKER
+from repoutils.commands.post_screenshots import main as post_screenshots_main
 
 
 class PostScreenshotsTests(TestCase):
@@ -71,7 +71,7 @@ class PostScreenshotsTests(TestCase):
                 contextlib.redirect_stdout(io.StringIO()),
                 contextlib.redirect_stderr(stderr),
                 mock.patch.dict("os.environ", env, clear=True),
-                mock.patch("repotools.github.request", fake_request),
+                mock.patch("repoutils.github.request", fake_request),
             ):
                 code = post_screenshots_main(["7", *args])
         return code, stderr.getvalue(), requests
@@ -197,7 +197,7 @@ class PostScreenshotsTests(TestCase):
             out = "o/r" if cmd[1] == "repo" else "gho_local"
             return subprocess.CompletedProcess(cmd, 0, stdout=out + "\n")
 
-        with mock.patch("repotools.github.subprocess.run", fake_gh):
+        with mock.patch("repoutils.github.subprocess.run", fake_gh):
             code, _, requests = self._run(["index.png"], env={})
         self.assertEqual(code, 0)
         self.assertEqual({r[2] for r in requests}, {"gho_local"})
@@ -208,7 +208,7 @@ class PostScreenshotsTests(TestCase):
 
         with (
             mock.patch.dict("os.environ", {}, clear=True),
-            mock.patch("repotools.github.subprocess.run", fake_gh),
+            mock.patch("repoutils.github.subprocess.run", fake_gh),
             tempfile.TemporaryDirectory() as tmp,
             contextlib.chdir(tmp),
             contextlib.redirect_stderr(io.StringIO()) as stderr,

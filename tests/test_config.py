@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from repotools import config
+from repoutils import config
 
 
 def _write(root: Path, text: str) -> Path:
@@ -15,15 +15,15 @@ def test_missing_file_or_table_means_defaults(tmp_path: Path) -> None:
     _write(tmp_path, "[project]\nname = 'x'\n")
     assert config.load(tmp_path) == {}
     assert config.section("long-files", tmp_path) == {}
-    assert config.marker("long-files", tmp_path) == "<!-- repotools-long-files -->"
+    assert config.marker("long-files", tmp_path) == "<!-- repoutils-long-files -->"
     assert config.default_branch(tmp_path) == "main"
 
 
 def test_reads_settings(tmp_path: Path) -> None:
     _write(
         tmp_path,
-        '[tool.repotools]\ncomment-prefix = "lifetracker"\ndefault-branch = "master"\n'
-        '[tool.repotools.sentence-per-line]\nfiles = ["A.md"]\n',
+        '[tool.repoutils]\ncomment-prefix = "lifetracker"\ndefault-branch = "master"\n'
+        '[tool.repoutils.sentence-per-line]\nfiles = ["A.md"]\n',
     )
     assert config.marker("patch-coverage", tmp_path) == "<!-- lifetracker-patch-coverage -->"
     assert config.default_branch(tmp_path) == "master"
@@ -35,13 +35,13 @@ def test_reads_settings(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("text", "call", "message"),
     [
-        ("[tool]\nrepotools = 1\n", lambda root: config.load(root), "must be a table"),
-        ("[tool.repotools]\nlong-files = 1\n", lambda root: config.section("long-files", root), "must be a table"),
-        ("[tool.repotools]\ncomment-prefix = ''\n", lambda root: config.comment_prefix(root), "comment-prefix"),
-        ("[tool.repotools]\ncomment-prefix = 'a-->'\n", lambda root: config.comment_prefix(root), "comment-prefix"),
-        ("[tool.repotools]\ndefault-branch = 1\n", lambda root: config.default_branch(root), "default-branch"),
+        ("[tool]\nrepoutils = 1\n", lambda root: config.load(root), "must be a table"),
+        ("[tool.repoutils]\nlong-files = 1\n", lambda root: config.section("long-files", root), "must be a table"),
+        ("[tool.repoutils]\ncomment-prefix = ''\n", lambda root: config.comment_prefix(root), "comment-prefix"),
+        ("[tool.repoutils]\ncomment-prefix = 'a-->'\n", lambda root: config.comment_prefix(root), "comment-prefix"),
+        ("[tool.repoutils]\ndefault-branch = 1\n", lambda root: config.default_branch(root), "default-branch"),
         (
-            "[tool.repotools.x]\nfiles = [1]\n",
+            "[tool.repoutils.x]\nfiles = [1]\n",
             lambda root: config.string_list(config.section("x", root), "files", [], "[x]"),
             "files must be a list of strings",
         ),

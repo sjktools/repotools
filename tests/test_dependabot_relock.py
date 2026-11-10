@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 from unittest import TestCase, mock
 
-from repotools.commands.dependabot_relock import main as relock_main
+from repoutils.commands.dependabot_relock import main as relock_main
 from tests.test_requirements_min_versions import _lock
 
 
@@ -42,7 +42,7 @@ class DependabotRelockTests(TestCase):
             with (
                 contextlib.chdir(path),
                 contextlib.redirect_stderr(stderr),
-                mock.patch("repotools.commands.dependabot_relock.subprocess.run", fake_run),
+                mock.patch("repoutils.commands.dependabot_relock.subprocess.run", fake_run),
             ):
                 try:
                     code = relock_main("origin/master")

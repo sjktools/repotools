@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from repotools.commands.check_pins import main, pins, steps
+from repoutils.commands.check_pins import main, pins, steps
 
 WORKFLOW = """\
 jobs:

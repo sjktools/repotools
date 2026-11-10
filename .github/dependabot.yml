@@ -18,7 +18,7 @@ updates:
       - dependencies
       - type:maintenance
 
-  # repotools has no runtime dependencies, so this updates the dev group, in one PR.
+  # repoutils has no runtime dependencies, so this updates the dev group, in one PR.
   - package-ecosystem: uv
     directory: /
     schedule:

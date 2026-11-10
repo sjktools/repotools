@@ -174,7 +174,7 @@ jobs:
   # is read-only. Queued per PR, and posts only if HEAD_SHA is still the PR's
   # head, so an older commit's run that finishes last can't overwrite a newer
   # report. Needs no secrets, and installs nothing alongside its token: it runs
-  # the PR's repotools from source (stdlib only) with `uv run --no-project`.
+  # the PR's repoutils from source (stdlib only) with `uv run --no-project`.
   post-patch-coverage:
     needs: coverage
     if: ${{ !cancelled() && needs.coverage.outputs.patch-report == 'success' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' }}
@@ -220,7 +220,7 @@ jobs:
   # Lists the files over pyproject.toml's line limit, for information only, in
   # the job summary and, on PRs, as a github-actions[bot] comment edited in
   # place, with the files the PR changes first. The report is cheap to make and
-  # repotools needs only the standard library, so one job both makes and posts
+  # repoutils needs only the standard library, so one job both makes and posts
   # it: only same-repo, non-Dependabot PRs post; queued per PR; posts only if
   # HEAD_SHA is still the PR's head; installs nothing.
   long-files:
@@ -302,7 +302,7 @@ jobs:
   # Runs on a Dependabot branch, whose bumped dependency we don't trust, so the
   # write-capable DEPENDABOT_FIX_TOKEN is only exposed to the final push step:
   # checkout doesn't persist credentials, and nothing installs the project or its
-  # dependencies (the recipes run repotools from source with the standard
+  # dependencies (the recipes run repoutils from source with the standard
   # library). GITHUB_TOKEN is read-only on Dependabot runs whatever this job asks
   # for, so ask for read. The run its push triggers checks the fixed commit.
   dependabot-fix:

@@ -162,7 +162,7 @@ def recover_from_failed_create(gh_repo: str, head_branch: str, base_branch: str,
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
-        prog="repotools recreate-pr", description="Recreate a GitHub PR as a draft and close the original."
+        prog="repoutils recreate-pr", description="Recreate a GitHub PR as a draft and close the original."
     )
     parser.add_argument("pr_url", help="The URL of the GitHub Pull Request")
     args = parser.parse_args(argv)

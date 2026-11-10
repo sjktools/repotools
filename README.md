@@ -1,10 +1,10 @@
-# repotools
+# repoutils
 
-Repository tooling for Python projects that use uv, just and GitHub Actions, run as `repotools <command>`.
+Repository tooling for Python projects that use uv, just and GitHub Actions, run as `repoutils <command>`.
 
 It collects the checks and CI helpers that used to live in the `scripts/` directories of [taxtracker](https://github.com/skissane/taxtracker) and [exolot](https://github.com/skissane/exolot), so each project can depend on one package instead of keeping its own copies.
 
-repotools needs only the Python standard library (3.12 or later), and has no dependencies.
+repoutils needs only the Python standard library (3.12 or later), and has no dependencies.
 That's deliberate: projects run it in CI jobs that hold write-capable tokens or check out untrusted Dependabot branches, where nothing else should be installed.
 
 ## Installing
@@ -13,16 +13,16 @@ Add it to its own dependency group, and include that group in `dev`:
 
 ```toml
 [dependency-groups]
-repotools = ["repotools>=0.1.0"]
-dev = [{ include-group = "repotools" }, "pytest>=9"]
+repoutils = ["repoutils>=0.1.0"]
+dev = [{ include-group = "repoutils" }, "pytest>=9"]
 ```
 
-Then run a command with `uv run repotools <command>`.
-In a job with a write-capable token, use `uv run --only-group repotools repotools <command>`, which installs only repotools (hash-checked against `uv.lock`) and not the project or its other dependencies.
+Then run a command with `uv run repoutils <command>`.
+In a job with a write-capable token, use `uv run --only-group repoutils repoutils <command>`, which installs only repoutils (hash-checked against `uv.lock`) and not the project or its other dependencies.
 
 ## Commands
 
-Run `repotools --help` for the list, and `repotools <command> --help` for a command's options.
+Run `repoutils --help` for the list, and `repoutils <command> --help` for a command's options.
 
 | Command | What it does |
 | --- | --- |
@@ -52,25 +52,25 @@ The commands that post to a PR read `$GITHUB_TOKEN`, falling back to `gh auth to
 Every setting is optional, and lives in the project's `pyproject.toml`:
 
 ```toml
-[tool.repotools]
+[tool.repoutils]
 # Prefix of the hidden markers that find this project's PR comments,
-# e.g. <!-- repotools-patch-coverage -->.
-comment-prefix = "repotools"
+# e.g. <!-- repoutils-patch-coverage -->.
+comment-prefix = "repoutils"
 # Compared with when there's no PR base.
 default-branch = "main"
 
-[tool.repotools.sentence-per-line]
+[tool.repoutils.sentence-per-line]
 files = ["AGENTS.md", "README.md"]
 
-[tool.repotools.screenshots]
+[tool.repoutils.screenshots]
 dir = "screenshots"
 
-[tool.repotools.lock-platforms]
+[tool.repoutils.lock-platforms]
 # "os" allows any arch; "os:arch" one ("*" for any). "linux" matches manylinux and musllinux.
 supported = ["any", "linux:x86_64", "linux:aarch64", "macosx"]
 tolerated = ["ios", "pyemscripten"]
 
-[tool.repotools.long-files]
+[tool.repoutils.long-files]
 include = ["*.py"]
 exclude = ["*/migrations/*"]
 limit = 500

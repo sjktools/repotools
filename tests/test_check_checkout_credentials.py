@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from repotools.commands.check_checkout_credentials import main
+from repoutils.commands.check_checkout_credentials import main
 
 WORKFLOW = """\
 jobs:

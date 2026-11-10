@@ -11,7 +11,7 @@ as Dependabot's did; if not, or if re-locking fails, it puts Dependabot's uv.loc
 back.
 
 Usage (from the repo root, base ref already fetched):
-    repotools dependabot-relock origin/main
+    repoutils dependabot-relock origin/main
 """
 
 import argparse
@@ -84,6 +84,6 @@ def main(base_ref: str) -> int:
 
 
 def run(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(prog="repotools dependabot-relock", description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(prog="repoutils dependabot-relock", description=__doc__.splitlines()[0])
     parser.add_argument("base_ref", metavar="base-ref", help="the PR's base branch, already fetched, e.g. origin/main")
     return main(parser.parse_args(argv).base_ref)

@@ -1,15 +1,15 @@
 set minimum-version := '1.58.0'
 
-# Runs repotools from this checkout's source with nothing installed (it needs
+# Runs repoutils from this checkout's source with nothing installed (it needs
 # only the standard library), for recipes CI runs with a write-capable token or
 # on an untrusted Dependabot branch: `uv run` without --no-project would build
 # and install the project, running its build backend, alongside the token.
-repotools := "PYTHONPATH=src uv run --no-project python -m repotools"
+repoutils := "PYTHONPATH=src uv run --no-project python -m repoutils"
 
 # Dummy assignment, so every recipe run sets up the repo's local Git config
-# (see `repotools git-config-setup`). `eager` makes just evaluate it even though
+# (see `repoutils git-config-setup`). `eager` makes just evaluate it even though
 # nothing uses it, whether or not `set lazy` is on (casey/just#3759).
-eager _ := shell(repotools + ' git-config-setup')
+eager _ := shell(repoutils + ' git-config-setup')
 
 # List available recipes
 default:
@@ -39,22 +39,22 @@ diff-cover base='origin/main' *args:
     uv run --group dev diff-cover coverage.xml --compare-branch={{ base }} --branch-coverage {{ args }}
 
 # The posting recipes run with a write-capable token in CI, so they use
-# the repotools variable above, installing nothing.
+# the repoutils variable above, installing nothing.
 
 # Post a patch coverage report (default patch-coverage.md) to a PR as a comment, or update the existing one
 [positional-arguments]
 patch-coverage-post *args:
-    {{ repotools }} post-patch-coverage "$@"
+    {{ repoutils }} post-patch-coverage "$@"
 
 # Wait (up to 10 minutes) for Codecov to have a PR base commit's coverage: arguments are owner/repo and the base SHA
 [positional-arguments]
 wait-for-base-coverage *args:
-    {{ repotools }} wait-for-base-coverage --check-name coverage "$@"
+    {{ repoutils }} wait-for-base-coverage --check-name coverage "$@"
 
 # List files over the line limit as Markdown, or post that to a PR (--post <PR>)
 [positional-arguments]
 long-files *args:
-    {{ repotools }} long-files "$@"
+    {{ repoutils }} long-files "$@"
 
 # Build the sdist and wheel into dist/
 build:
@@ -67,18 +67,18 @@ build:
 # Check that every distribution in dist/ (or the directory given) has a PEP 740 publish attestation
 [positional-arguments]
 check-attestations dist="dist":
-    {{ repotools }} check-attestations "$1"
+    {{ repoutils }} check-attestations "$1"
 
 # Install the wheel `just build` built into a fresh environment and check that it runs
 smoke:
     #!/usr/bin/env bash
     set -euo pipefail
     version="$(uv version --short)"
-    wheel="dist/repotools-${version}-py3-none-any.whl"
-    run() { uvx --isolated --no-cache --from "$wheel" repotools "$@"; }
+    wheel="dist/repoutils-${version}-py3-none-any.whl"
+    run() { uvx --isolated --no-cache --from "$wheel" repoutils "$@"; }
     actual="$(run --version)"
-    if [ "$actual" != "repotools ${version}" ]; then
-        echo "expected 'repotools ${version}' from ${wheel} --version, got '${actual}'" >&2
+    if [ "$actual" != "repoutils ${version}" ]; then
+        echo "expected 'repoutils ${version}' from ${wheel} --version, got '${actual}'" >&2
         exit 1
     fi
     run --help >/dev/null
@@ -93,12 +93,12 @@ check-release version index="https://pypi.org/simple/":
     set -euo pipefail
     for delay in 0 10 20 40 80 160; do
         sleep "$delay"
-        if actual="$(uvx --isolated --no-cache --default-index "$2" --from "repotools==$1" repotools --version)" && [ "$actual" = "repotools $1" ]; then
-            echo "repotools $1 installs from $2 and runs"
+        if actual="$(uvx --isolated --no-cache --default-index "$2" --from "repoutils==$1" repoutils --version)" && [ "$actual" = "repoutils $1" ]; then
+            echo "repoutils $1 installs from $2 and runs"
             exit 0
         fi
     done
-    echo "repotools $1 did not install from $2 and run" >&2
+    echo "repoutils $1 did not install from $2 and run" >&2
     exit 1
 
 # Lint with ruff
@@ -133,39 +133,39 @@ mypy:
 lint-workflows:
     uv run --group dev jactionlint
 
-# repotools' own checks, run from this checkout, so CI dogfoods them.
+# repoutils' own checks, run from this checkout, so CI dogfoods them.
 
 # Check Git-tracked text files for trailing whitespace and bad newlines
 whitespace-check:
-    uv run repotools check-whitespace
+    uv run repoutils check-whitespace
 
 # Check AGENTS.md and README.md stay one sentence per line
 sentence-per-line-check:
-    uv run repotools check-sentence-per-line
+    uv run repoutils check-sentence-per-line
 
 # Check that every workflow and local action pins the uv version pyproject.toml requires and the just version the justfile requires
 check-pins:
-    uv run repotools check-pins
+    uv run repoutils check-pins
 
 # Check that every actions/checkout step sets persist-credentials, so none keeps its token by default
 check-checkout-credentials:
-    uv run repotools check-checkout-credentials
+    uv run repoutils check-checkout-credentials
 
 # Check that uv.lock only has wheels for supported OS/CPU combinations
 lock-platforms-check:
-    uv run repotools check-lock-platforms
+    uv run repoutils check-lock-platforms
 
 # Check that dependency minimums in pyproject.toml match uv.lock
 requirements-check:
-    {{ repotools }} requirements-min-versions check
+    {{ repoutils }} requirements-min-versions check
 
 # Rewrite dependency minimums in pyproject.toml to the versions in uv.lock
 requirements-fix:
-    {{ repotools }} requirements-min-versions fix
+    {{ repoutils }} requirements-min-versions fix
 
 # Re-lock a Dependabot branch's uv.lock with this uv, from the base ref's uv.lock
 dependabot-relock base:
-    {{ repotools }} dependabot-relock {{ base }}
+    {{ repoutils }} dependabot-relock {{ base }}
 
 # Run all checks, without fixing anything or running tests
 check: lint fmt-check just-fmt-check mypy lint-workflows whitespace-check sentence-per-line-check check-pins check-checkout-credentials lock-platforms-check requirements-check

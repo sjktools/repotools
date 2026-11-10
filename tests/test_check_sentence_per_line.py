@@ -5,8 +5,8 @@ import textwrap
 from pathlib import Path
 from unittest import TestCase
 
-from repotools.commands.check_sentence_per_line import _problems as sentence_per_line_problems
-from repotools.commands.check_sentence_per_line import main as sentence_per_line_main
+from repoutils.commands.check_sentence_per_line import _problems as sentence_per_line_problems
+from repoutils.commands.check_sentence_per_line import main as sentence_per_line_main
 
 
 class CheckSentencePerLineTests(TestCase):

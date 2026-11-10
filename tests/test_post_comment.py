@@ -10,10 +10,10 @@ from pathlib import Path
 from typing import Any, NoReturn
 from unittest import TestCase, mock
 
-from repotools import github as github_comments
-from repotools.commands.post_comment import main as post_comment_main
+from repoutils import github as github_comments
+from repoutils.commands.post_comment import main as post_comment_main
 
-EXOLOT_MARKER = "<!-- repotools-exolot-findings -->"
+EXOLOT_MARKER = "<!-- repoutils-exolot-findings -->"
 HIDE = ["--name", "exolot-findings", "--hide-previous"]
 
 
@@ -141,7 +141,7 @@ class PostCommentEditTests(TestCase):
     def test_edits_the_earlier_comment_with_the_configured_prefix(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            (root / "pyproject.toml").write_text('[tool.repotools]\ncomment-prefix = "proj"\n')
+            (root / "pyproject.toml").write_text('[tool.repoutils]\ncomment-prefix = "proj"\n')
             report = root / "r.md"
             report.write_text("new\n")
             calls: list[tuple[str, str, Any]] = []

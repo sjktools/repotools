@@ -5,8 +5,8 @@ import tempfile
 from pathlib import Path
 from unittest import TestCase
 
-from repotools.commands.check_whitespace import _problems
-from repotools.commands.check_whitespace import main as whitespace_main
+from repoutils.commands.check_whitespace import _problems
+from repoutils.commands.check_whitespace import main as whitespace_main
 
 
 class CheckWhitespaceTests(TestCase):

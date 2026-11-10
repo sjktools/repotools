@@ -4,7 +4,7 @@ from unittest import mock
 
 import pytest
 
-from repotools.commands import git_config_setup
+from repoutils.commands import git_config_setup
 
 
 def _repo(tmp_path: Path) -> Path:

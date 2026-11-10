@@ -160,6 +160,6 @@ def main(mode: str) -> int:
 
 
 def run(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(prog="repotools requirements-min-versions", description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(prog="repoutils requirements-min-versions", description=__doc__.splitlines()[0])
     parser.add_argument("mode", choices=["check", "fix"], help="check fails on a mismatch; fix rewrites pyproject.toml")
     return main(parser.parse_args(argv).mode)

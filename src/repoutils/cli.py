@@ -1,8 +1,8 @@
-"""The ``repotools`` command: ``repotools <command> [args...]``.
+"""The ``repoutils`` command: ``repoutils <command> [args...]``.
 
-Each command is a module in ``repotools.commands`` with a ``run(argv) -> int``
+Each command is a module in ``repoutils.commands`` with a ``run(argv) -> int``
 function, which parses its own arguments. Modules are imported only when their
-command runs, so ``repotools --help`` stays fast.
+command runs, so ``repoutils --help`` stays fast.
 """
 
 import importlib
@@ -61,24 +61,24 @@ COMMANDS = {command.name: command for commands in GROUPS.values() for command in
 
 def _version() -> str:
     try:
-        return version("repotools")
+        return version("repoutils")
     except PackageNotFoundError:  # pragma: no cover - only when run from an uninstalled checkout
         return "unknown"
 
 
 def usage() -> str:
     width = max(len(name) for name in COMMANDS)
-    lines = ["usage: repotools <command> [args...]", "", "Commands:"]
+    lines = ["usage: repoutils <command> [args...]", "", "Commands:"]
     for group, commands in GROUPS.items():
         lines += ["", f"  {group}:"]
         lines += [f"    {command.name:<{width}}  {command.summary}" for command in commands]
-    lines += ["", "Run `repotools <command> --help` for a command's options."]
+    lines += ["", "Run `repoutils <command> --help` for a command's options."]
     return "\n".join(lines)
 
 
 def load(name: str) -> Callable[[list[str]], int]:
     """The ``run`` function of the named command."""
-    run: Callable[[list[str]], int] = importlib.import_module(f"repotools.commands.{COMMANDS[name].module}").run
+    run: Callable[[list[str]], int] = importlib.import_module(f"repoutils.commands.{COMMANDS[name].module}").run
     return run
 
 
@@ -88,9 +88,9 @@ def main(argv: list[str] | None = None) -> int:
         print(usage())
         return 0 if args else 2
     if args[0] == "--version":
-        print(f"repotools {_version()}")
+        print(f"repoutils {_version()}")
         return 0
     if args[0] not in COMMANDS:
-        print(f"repotools: unknown command {args[0]!r}\n\n{usage()}", file=sys.stderr)
+        print(f"repoutils: unknown command {args[0]!r}\n\n{usage()}", file=sys.stderr)
         return 2
     return load(args[0])(args[1:])

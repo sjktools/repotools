@@ -6,9 +6,9 @@ from collections.abc import Callable
 from pathlib import Path
 from unittest import TestCase
 
-from repotools import config
-from repotools.commands.check_screenshots_dir import main as screenshots_dir_main
-from repotools.commands.check_screenshots_dir import screenshots_dir
+from repoutils import config
+from repoutils.commands.check_screenshots_dir import main as screenshots_dir_main
+from repoutils.commands.check_screenshots_dir import screenshots_dir
 
 SCREENSHOTS_GITIGNORE = b"# Screenshots written by `just screenshots`\n*\n!/.gitignore\n"
 
@@ -48,7 +48,7 @@ class CheckScreenshotsDirTests(TestCase):
     def test_configured_directory(self) -> None:
         def setup(path: Path) -> None:
             (path / "screenshots").rename(path / "shots")
-            (path / "pyproject.toml").write_text('[tool.repotools.screenshots]\ndir = "shots/"\n')
+            (path / "pyproject.toml").write_text('[tool.repoutils.screenshots]\ndir = "shots/"\n')
             self._git("add", "-A")
 
         code, stdout = self._run(setup)
@@ -100,6 +100,6 @@ class CheckScreenshotsDirTests(TestCase):
     def test_rejects_a_bad_configured_directory(self) -> None:
         for value in ('"/"', '""', "1"):
             with self.subTest(value=value), tempfile.TemporaryDirectory() as tmp:
-                (Path(tmp) / "pyproject.toml").write_text(f"[tool.repotools.screenshots]\ndir = {value}\n")
+                (Path(tmp) / "pyproject.toml").write_text(f"[tool.repoutils.screenshots]\ndir = {value}\n")
                 with self.assertRaisesRegex(config.ConfigError, "dir must be a non-empty string"):
                     screenshots_dir(Path(tmp))

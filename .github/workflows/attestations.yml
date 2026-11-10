@@ -20,7 +20,7 @@ on:
       - .github/workflows/publish-*.yml
       - pyproject.toml
       - justfile
-      - src/repotools/commands/check_attestations.py
+      - src/repoutils/commands/check_attestations.py
   workflow_dispatch:
 
 # A new push to the PR cancels the run for the one before, so a superseded

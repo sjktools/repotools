@@ -153,5 +153,5 @@ def main(root: Path = Path()) -> int:
 
 
 def run(argv: list[str]) -> int:
-    argparse.ArgumentParser(prog="repotools check-pins", description=__doc__.splitlines()[0]).parse_args(argv)
+    argparse.ArgumentParser(prog="repoutils check-pins", description=__doc__.splitlines()[0]).parse_args(argv)
     return main()

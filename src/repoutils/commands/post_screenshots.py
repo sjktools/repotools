@@ -11,10 +11,10 @@ import urllib.error
 import urllib.parse
 from pathlib import Path
 
-from repotools import config
-from repotools import github as github_comments
-from repotools.commands.check_screenshots_dir import screenshots_dir
-from repotools.github import API_URL
+from repoutils import config
+from repoutils import github as github_comments
+from repoutils.commands.check_screenshots_dir import screenshots_dir
+from repoutils.github import API_URL
 
 # Marks the comment this script posts, so the next run can find and edit it.
 MARKER_NAME = "screenshots"
@@ -84,7 +84,7 @@ def _upload(path: Path, repository_id: int, token: str) -> str:
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
-        prog="repotools post-screenshots",
+        prog="repoutils post-screenshots",
         description="Post screenshots to a PR as a comment, or edit the one "
         "posted before. Uploads with $SCREENSHOTS_TOKEN (attachment uploads need "
         "a user token) and comments with $GITHUB_TOKEN; each defaults to "
@@ -94,7 +94,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument(
         "--dir",
         type=Path,
-        help="the screenshots directory (default: [tool.repotools.screenshots] dir, else screenshots)",
+        help="the screenshots directory (default: [tool.repoutils.screenshots] dir, else screenshots)",
     )
     parser.add_argument(
         "--commit",

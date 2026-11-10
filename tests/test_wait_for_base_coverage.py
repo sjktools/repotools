@@ -11,9 +11,9 @@ from email.message import Message
 from typing import Any, override
 from unittest import TestCase, mock
 
-from repotools.commands import wait_for_base_coverage
-from repotools.commands.wait_for_base_coverage import base_ci_state, codecov_coverage
-from repotools.commands.wait_for_base_coverage import main as wait_for_base_coverage_main
+from repoutils.commands import wait_for_base_coverage
+from repoutils.commands.wait_for_base_coverage import base_ci_state, codecov_coverage
+from repoutils.commands.wait_for_base_coverage import main as wait_for_base_coverage_main
 from tests.test_github import NO_REDIRECT_OPEN
 
 
@@ -151,8 +151,8 @@ class WaitForBaseCoverageTests(TestCase):
 
         out = io.StringIO()
         with (
-            mock.patch("repotools.commands.wait_for_base_coverage.codecov_coverage", side_effect=coverage),
-            mock.patch("repotools.commands.wait_for_base_coverage.base_ci_state", side_effect=ci) as ci_mock,
+            mock.patch("repoutils.commands.wait_for_base_coverage.codecov_coverage", side_effect=coverage),
+            mock.patch("repoutils.commands.wait_for_base_coverage.base_ci_state", side_effect=ci) as ci_mock,
             mock.patch.dict("os.environ", {"GITHUB_TOKEN": "t0k"}),
             contextlib.redirect_stdout(out),
         ):
@@ -239,8 +239,8 @@ class WaitForBaseCoverageTests(TestCase):
             now[0] += seconds
 
         with (
-            mock.patch("repotools.commands.wait_for_base_coverage.codecov_coverage", side_effect=request),
-            mock.patch("repotools.commands.wait_for_base_coverage.base_ci_state", side_effect=request),
+            mock.patch("repoutils.commands.wait_for_base_coverage.codecov_coverage", side_effect=request),
+            mock.patch("repoutils.commands.wait_for_base_coverage.base_ci_state", side_effect=request),
             contextlib.redirect_stdout(io.StringIO()),
         ):
             code = wait_for_base_coverage_main(

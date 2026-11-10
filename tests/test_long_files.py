@@ -9,12 +9,12 @@ from pathlib import Path
 from typing import Any, override
 from unittest import TestCase, mock
 
-from repotools import github as github_comments
-from repotools.commands import long_files
-from repotools.commands.long_files import MARKER, Config, LongFile, Report, find_long_files, load_config, render
+from repoutils import github as github_comments
+from repoutils.commands import long_files
+from repoutils.commands.long_files import MARKER, Config, LongFile, Report, find_long_files, load_config, render
 
 _PYPROJECT = """
-[tool.repotools.long-files]
+[tool.repoutils.long-files]
 include = ["*.py"]
 exclude = ["*/migrations/*"]
 limit = 5
@@ -126,7 +126,7 @@ class LoadConfigTests(_GitRepoTestCase):
         self.assertFalse(config.covers("README.md"))
 
     def test_defaults(self) -> None:
-        self.write("pyproject.toml", '[tool.repotools.long-files]\ninclude = ["*.py"]\nlimit = 3\n')
+        self.write("pyproject.toml", '[tool.repoutils.long-files]\ninclude = ["*.py"]\nlimit = 3\n')
         self.assertEqual(self.config(), Config(include=["*.py"], exclude=[], limit=3, limits={}))
 
     def test_no_table_means_every_python_file_and_500_lines(self) -> None:
@@ -136,7 +136,7 @@ class LoadConfigTests(_GitRepoTestCase):
         self.assertEqual(self.config(), Config(include=["*.py"], exclude=[], limit=500, limits={}))
 
     def test_policy(self) -> None:
-        self.write("pyproject.toml", '[tool.repotools.long-files]\npolicy = "Split them."\n')
+        self.write("pyproject.toml", '[tool.repoutils.long-files]\npolicy = "Split them."\n')
         self.assertEqual(self.config().policy, "Split them.")
 
     def test_rejects_bad_tables(self) -> None:
@@ -149,12 +149,12 @@ class LoadConfigTests(_GitRepoTestCase):
             'include = ["*.py"]\nlimit = 5\nlimits = { "a" = "b" }': "limits must map",
         }
         with self.subTest("not a table"):
-            self.write("pyproject.toml", "[tool.repotools]\nlong-files = 1\n")
+            self.write("pyproject.toml", "[tool.repoutils]\nlong-files = 1\n")
             with self.assertRaisesRegex(ValueError, "must be a table"):
                 self.config()
         for body, message in cases.items():
             with self.subTest(body=body):
-                self.write("pyproject.toml", f"[tool.repotools.long-files]\n{body}\n" if body else "")
+                self.write("pyproject.toml", f"[tool.repoutils.long-files]\n{body}\n" if body else "")
                 with self.assertRaisesRegex(ValueError, message):
                     self.config()
 
@@ -339,10 +339,10 @@ class MainTests(_GitRepoTestCase):
                 self.assertIn(f"git merge-base {expected} HEAD failed", err)
 
     def test_bad_config_fails(self) -> None:
-        self.write("pyproject.toml", "[tool.repotools.long-files]\nlimit = 0\n")
+        self.write("pyproject.toml", "[tool.repoutils.long-files]\nlimit = 0\n")
         code, _, err = self._run([])
         self.assertEqual(code, 1)
-        self.assertIn("[tool.repotools.long-files] limit must be a positive integer", err)
+        self.assertIn("[tool.repoutils.long-files] limit must be a positive integer", err)
 
     def test_http_error_fails(self) -> None:
         def request(*args: object, **kwargs: object) -> Any:

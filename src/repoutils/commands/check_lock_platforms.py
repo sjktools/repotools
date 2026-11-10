@@ -1,6 +1,6 @@
 """Check that uv.lock only has wheels for the platforms the project allows.
 
-``[tool.repotools.lock-platforms]`` lists them: ``supported`` (the platforms
+``[tool.repoutils.lock-platforms]`` lists them: ``supported`` (the platforms
 ``[tool.uv] environments`` is meant to allow) and ``tolerated`` (ones uv keeps
 wheels for despite ``environments``, such as iOS and Emscripten). Each entry is
 ``os`` or ``os:arch``, with ``*`` for any arch, matched against a wheel's
@@ -16,7 +16,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from repotools import config
+from repoutils import config
 
 
 # How _classify_platform treats an (OS, arch) pair, as split by _split_platform.
@@ -44,7 +44,7 @@ class Platforms:
     @classmethod
     def from_config(cls, root: Path = Path()) -> "Platforms":
         table = config.section("lock-platforms", root)
-        where = "[tool.repotools.lock-platforms]"
+        where = "[tool.repoutils.lock-platforms]"
         return cls(
             tuple(config.string_list(table, "supported", list(DEFAULT_SUPPORTED), where)),
             tuple(config.string_list(table, "tolerated", list(DEFAULT_TOLERATED), where)),
@@ -133,7 +133,7 @@ def main() -> int:
         print(
             "Check `[tool.uv] environments` in pyproject.toml. If the platform "
             "should be supported, add it there and to `supported` in "
-            "[tool.repotools.lock-platforms]; if uv keeps its wheels despite "
+            "[tool.repoutils.lock-platforms]; if uv keeps its wheels despite "
             "`environments`, add it to `tolerated` there."
         )
         return 1
@@ -142,5 +142,5 @@ def main() -> int:
 
 
 def run(argv: list[str]) -> int:
-    argparse.ArgumentParser(prog="repotools check-lock-platforms", description=__doc__.splitlines()[0]).parse_args(argv)
+    argparse.ArgumentParser(prog="repoutils check-lock-platforms", description=__doc__.splitlines()[0]).parse_args(argv)
     return main()

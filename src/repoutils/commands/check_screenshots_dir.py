@@ -8,14 +8,14 @@ that .gitignore in the directory, and both its staged and working tree copies
 ignore everything but themselves: apart from comments and blank lines, they
 must be exactly the lines `*` and `!/.gitignore`.
 
-The directory is `[tool.repotools.screenshots]`'s `dir` (default `screenshots`).
+The directory is `[tool.repoutils.screenshots]`'s `dir` (default `screenshots`).
 """
 
 import argparse
 import subprocess
 from pathlib import Path
 
-from repotools import config
+from repoutils import config
 
 DEFAULT_DIR = "screenshots"
 RULES = ["*", "!/.gitignore"]
@@ -25,7 +25,7 @@ def screenshots_dir(root: Path = Path()) -> str:
     """The screenshots directory, relative to the repo root, from config."""
     value = config.section("screenshots", root).get("dir", DEFAULT_DIR)
     if not isinstance(value, str) or not value.strip("/"):
-        raise config.ConfigError("[tool.repotools.screenshots] dir must be a non-empty string")
+        raise config.ConfigError("[tool.repoutils.screenshots] dir must be a non-empty string")
     return value.strip("/")
 
 
@@ -70,6 +70,6 @@ def main(directory: str | None = None) -> int:
 
 
 def run(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(prog="repotools check-screenshots-dir", description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(prog="repoutils check-screenshots-dir", description=__doc__.splitlines()[0])
     parser.add_argument("--dir", help=f"the screenshots directory (default: from config, else {DEFAULT_DIR})")
     return main(parser.parse_args(argv).dir)

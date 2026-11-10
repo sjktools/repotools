@@ -4,13 +4,13 @@ import tempfile
 from pathlib import Path
 from unittest import TestCase
 
-from repotools.commands.check_lock_platforms import (
+from repoutils.commands.check_lock_platforms import (
     PlatformClassification,
     Platforms,
     _classify_platform,
     _split_platform,
 )
-from repotools.commands.check_lock_platforms import main as os_arch_main
+from repoutils.commands.check_lock_platforms import main as os_arch_main
 
 
 class ValidateUvLockOsArchTests(TestCase):
@@ -147,5 +147,5 @@ class ConfiguredPlatformsTests(TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self.assertEqual(Platforms.from_config(root), Platforms())
-            (root / "pyproject.toml").write_text('[tool.repotools.lock-platforms]\nsupported = ["any"]\n')
+            (root / "pyproject.toml").write_text('[tool.repoutils.lock-platforms]\nsupported = ["any"]\n')
             self.assertEqual(Platforms.from_config(root), Platforms(supported=("any",)))

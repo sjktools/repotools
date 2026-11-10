@@ -2,7 +2,7 @@
 
 Idempotent, and prints (to stderr) only when it changes a setting, so a
 justfile can run it on every recipe, e.g. with
-``eager _ := shell('uv run repotools git-config-setup')``. Outside a Git
+``eager _ := shell('uv run repoutils git-config-setup')``. Outside a Git
 checkout (e.g. a ``git archive`` copy) it does nothing, rather than failing.
 
 Currently it sets only ``blame.ignoreRevsFile`` to ``.git-blame-ignore-revs``,
@@ -59,5 +59,5 @@ def main(cwd: Path = Path()) -> int:
 
 
 def run(argv: list[str]) -> int:
-    argparse.ArgumentParser(prog="repotools git-config-setup", description=__doc__.splitlines()[0]).parse_args(argv)
+    argparse.ArgumentParser(prog="repoutils git-config-setup", description=__doc__.splitlines()[0]).parse_args(argv)
     return main()

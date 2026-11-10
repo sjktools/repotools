@@ -12,8 +12,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import NoReturn
 
-from repotools import config
-from repotools import github as github_comments
+from repoutils import config
+from repoutils import github as github_comments
 
 # Marks the comment this script posts, so the next run can find and edit it.
 MARKER_NAME = "patch-coverage"
@@ -192,7 +192,7 @@ def _build_body(report: str, commit: str | None, run_url: str | None, marker: st
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(
-        prog="repotools post-patch-coverage",
+        prog="repoutils post-patch-coverage",
         description="Post diff-cover's Markdown patch coverage report to a PR as a "
         "comment, or edit the one posted before. Comments with $GITHUB_TOKEN, "
         "defaulting to `gh auth token`.",

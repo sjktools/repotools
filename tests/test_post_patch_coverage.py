@@ -11,10 +11,10 @@ from pathlib import Path
 from typing import Any
 from unittest import TestCase, mock
 
-from repotools.commands.post_patch_coverage import MARKER as PATCH_COVERAGE_MARKER
-from repotools.commands.post_patch_coverage import MAX_BODY_CHARS, _build_body
-from repotools.commands.post_patch_coverage import main as post_patch_coverage_main
-from repotools.commands.post_screenshots import MARKER
+from repoutils.commands.post_patch_coverage import MARKER as PATCH_COVERAGE_MARKER
+from repoutils.commands.post_patch_coverage import MAX_BODY_CHARS, _build_body
+from repoutils.commands.post_patch_coverage import main as post_patch_coverage_main
+from repoutils.commands.post_screenshots import MARKER
 
 
 class PostPatchCoverageTests(TestCase):
@@ -60,7 +60,7 @@ class PostPatchCoverageTests(TestCase):
                 contextlib.redirect_stdout(io.StringIO()),
                 contextlib.redirect_stderr(stderr),
                 mock.patch.dict("os.environ", {"GITHUB_TOKEN": "ghs", "GITHUB_REPOSITORY": "o/r"}, clear=True),
-                mock.patch("repotools.github.request", fake_request),
+                mock.patch("repoutils.github.request", fake_request),
             ):
                 code = post_patch_coverage_main(["7", *args])
         return code, stderr.getvalue(), requests
@@ -230,7 +230,7 @@ class PostPatchCoverageTests(TestCase):
 
         with (
             mock.patch.dict("os.environ", {}, clear=True),
-            mock.patch("repotools.github.subprocess.run", fake_gh),
+            mock.patch("repoutils.github.subprocess.run", fake_gh),
             tempfile.TemporaryDirectory() as tmp,
             contextlib.chdir(tmp),
             contextlib.redirect_stderr(io.StringIO()) as stderr,

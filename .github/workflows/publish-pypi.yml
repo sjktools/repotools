@@ -96,7 +96,7 @@ jobs:
     # release's own page, rather than the project's latest release.
     environment:
       name: testpypi
-      url: https://test.pypi.org/project/repotools/${{ needs.build.outputs.version }}/
+      url: https://test.pypi.org/project/repoutils/${{ needs.build.outputs.version }}/
     permissions:
       contents: read
       id-token: write
@@ -157,7 +157,7 @@ jobs:
     # As for publish-testpypi, "View deployment" opens this release's page.
     environment:
       name: pypi
-      url: https://pypi.org/project/repotools/${{ needs.build.outputs.version }}/
+      url: https://pypi.org/project/repoutils/${{ needs.build.outputs.version }}/
     permissions:
       contents: read
       id-token: write
