@@ -66,9 +66,8 @@ def _keys(lines: list[str]) -> list[tuple[int, str]]:
     """Each line of a step (blanks and comments already dropped) with its
     indent and, where it starts one of the step's own keys, that key's text, or
     "" where it doesn't. The step's keys sit just past its `- `, so a line
-    deeper in (in a `run: |` script, say) isn't taken for one of them."""
-    if not lines:
-        return []
+    deeper in (in a `run: |` script, say) isn't taken for one of them. A
+    step always has its `- ` line, so lines is never empty."""
     item = _ITEM_RE.match(lines[0])
     key_depth = item.end() if item else _depth(lines[0])
     keys = [(key_depth, lines[0][key_depth:])]

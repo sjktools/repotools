@@ -207,6 +207,20 @@ class PostPatchCoverageTests(TestCase):
             "[this workflow run](https://example.com/run)._",
         )
 
+    def test_long_report_truncated_outside_code(self) -> None:
+        # A cut in the file table, outside any code block, adds no fence.
+        files = "".join(f"- f{n}&#46;py (50.0%): Missing lines 2\n" for n in range(5_000))
+        report = self.HEAD.replace("- a&#46;py (50.0%): Missing lines 2\n", files)
+        code, _, requests = self._run(report=report)
+        self.assertEqual(code, 0)
+        before, note = self._writes(requests)[0][3]["body"].rsplit("\n\n", 1)
+        self.assertLessEqual(len(before), MAX_BODY_CHARS)
+        self.assertNotIn("```", before)
+        self.assertTrue(before.endswith(" | 50.0% | 2 |"))
+        self.assertEqual(
+            note, "_Report truncated; the whole of it is in the `patch-coverage` artifact of the workflow run._"
+        )
+
     def test_missing_report(self) -> None:
         code, stderr, requests = self._run(report=None)
         self.assertEqual(code, 1)

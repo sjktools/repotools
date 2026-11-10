@@ -95,6 +95,13 @@ class RecreatePrTests(TestCase):
             self.assertEqual(args[args.index("--repo") + 1], "github.com/o/r")
         self.assertIn("Superseded by #9", calls[3][0])
 
+    def test_no_labels_or_milestone(self) -> None:
+        code, calls, _ = self.run_main([self.URL], view_json=self.pr_json(labels=[], milestone=None))
+        self.assertIsNone(code)
+        create_args = calls[2][0]
+        self.assertNotIn("--label", create_args)
+        self.assertNotIn("--milestone", create_args)
+
     def test_refuses_fork(self) -> None:
         code, calls, err = self.run_main([self.URL], view_json=self.pr_json(isCrossRepository=True))
         self.assertEqual(code, 1)

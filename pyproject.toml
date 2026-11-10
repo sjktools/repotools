@@ -95,6 +95,8 @@ addopts = "-n auto"
 [tool.coverage.run]
 source = ["repoutils"]
 branch = true
+# Run only as `python -m repoutils`, in a subprocess coverage doesn't measure.
+omit = ["*/repoutils/__main__.py"]
 
 [tool.coverage.report]
 show_missing = true
