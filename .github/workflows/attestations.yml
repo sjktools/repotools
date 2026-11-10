@@ -1,0 +1,89 @@
+name: Attestations
+
+# Checks on PRs that the publish jobs in publish-pypi.yml can still attest a
+# build, so a change that breaks it (an attest-action bump, an edit to the
+# publish workflow or the build settings) shows up before a release rather
+# than during one. It builds, then runs the prepare-publish action the publish
+# jobs run (which signs PEP 740 publish attestations with attest-action and
+# checks every file has one), then stops: it never uploads, and neither
+# index's trusted publisher names this workflow file, so its token can't
+# publish anyway. Sigstore signs for any GitHub OIDC identity, so this tests
+# everything but the upload. Each run adds an entry to Sigstore's public
+# transparency log.
+#
+# Keep its build job in step with publish-pypi.yml's.
+on:
+  pull_request:
+    paths:
+      - .github/actions/prepare-publish/**
+      - .github/workflows/attestations.yml
+      - .github/workflows/publish-*.yml
+      - pyproject.toml
+      - justfile
+      - src/repoutils/commands/check_attestations.py
+  workflow_dispatch:
+
+# A new push to the PR cancels the run for the one before, so a superseded
+# commit doesn't go on to sign (and add a transparency log entry). Set on the
+# workflow so a cancelled run's attest job is cancelled too; a manual run gets
+# a group of its own, so it never cancels or waits for another.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('attestations.yml-{0}', github.event.pull_request.number) || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  # Builds without id-token: write, as publish-pypi.yml's build job does, so
+  # the build steps (and the build backend they install) can't mint a token.
+  # That keeps only the build away from it: the attest job still runs the PR's
+  # justfile and check command with the token, and a same-repo PR can edit this
+  # workflow anyway, so the split isn't a boundary against the PR's author.
+  build:
+    # A fork PR's run gets no OIDC token, so attest-action can't sign there.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      # Keep version in step with pyproject.toml's [tool.uv] required-version.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.13.6"
+
+      # Keep just-version in step with the justfile's minimum-version.
+      - name: Install just
+        uses: extractions/setup-just@v4.0.0
+        with:
+          just-version: "1.58.0"
+
+      - name: Build package
+        run: just build
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+          overwrite: true
+
+  attest:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      # The same steps the publish jobs run before uv publish.
+      - name: Prepare publish
+        uses: $/.github/actions/prepare-publish

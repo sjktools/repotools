@@ -1,0 +1,421 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  # Unit tests on every supported Python version and OS. uv installs the
+  # matrix's Python, which overrides .python-version.
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        # Not Windows: [tool.uv] environments leaves it out of uv.lock.
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.12", "3.13", "3.14", "3.15"]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      # Keep version in step with pyproject.toml's [tool.uv] required-version.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.13.6"
+          python-version: ${{ matrix.python-version }}
+
+      # Keep just-version in step with the justfile's minimum-version.
+      - name: Install just
+        uses: extractions/setup-just@v4.0.0
+        with:
+          just-version: "1.58.0"
+
+      - name: Install dependencies
+        run: just sync
+
+      - name: Run tests
+        run: just test
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      # Keep version in step with pyproject.toml's [tool.uv] required-version.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.13.6"
+
+      # Keep just-version in step with the justfile's minimum-version.
+      - name: Install just
+        uses: extractions/setup-just@v4.0.0
+        with:
+          just-version: "1.58.0"
+
+      - name: Check lockfile is up to date
+        run: just lock-check
+
+      - name: Install dependencies
+        run: just sync
+
+      - name: Run checks
+        run: just check
+
+      - name: Build package
+        run: just build
+
+      - name: Smoke-test the wheel
+        run: just smoke
+
+  coverage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # For wait-for-base-coverage to read the base commit's check runs.
+      checks: read
+    outputs:
+      # So post-patch-coverage posts the report even if a later step fails.
+      patch-report: ${{ steps.patch-report.outcome }}
+
+    steps:
+      # Full history so diff-cover can find the merge base with the PR's base branch.
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # Keep version in step with pyproject.toml's [tool.uv] required-version.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.13.6"
+
+      # Keep just-version in step with the justfile's minimum-version.
+      - name: Install just
+        uses: extractions/setup-just@v4.0.0
+        with:
+          just-version: "1.58.0"
+
+      - name: Install dependencies
+        run: just sync
+
+      - name: Report coverage
+        run: just coverage --cov-report="markdown-append:${GITHUB_STEP_SUMMARY}"
+
+      # Codecov Test Analytics, from the junit.xml `just coverage` writes. Runs
+      # even if the tests failed, as that's when the results matter most.
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v7.1.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: junit.xml
+          report_type: test_results
+          disable_search: true
+
+      - name: Report patch coverage
+        if: github.event_name == 'pull_request'
+        run: |
+          just diff-cover "origin/${BASE_REF}" --format markdown:patch-coverage.md
+          cat patch-coverage.md >> "$GITHUB_STEP_SUMMARY"
+        env:
+          BASE_REF: ${{ github.base_ref }}
+
+      # For post-patch-coverage to post to the PR.
+      - name: Upload patch coverage report
+        id: patch-report
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: patch-coverage
+          path: patch-coverage.md
+          retention-days: 14
+
+      # Codecov compares a PR with its base's report only when the PR's upload
+      # is processed, and never again, so wait for the base's upload first (e.g.
+      # when this PR was just brought up to date with main and main's run is
+      # still going). It never fails the job, only warns, and is quick when the
+      # base's CI has finished.
+      - name: Wait for the PR base's coverage on Codecov
+        if: github.event_name == 'pull_request'
+        run: just wait-for-base-coverage "$GITHUB_REPOSITORY" "$BASE_SHA"
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7.1.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          disable_search: true
+          fail_ci_if_error: true
+
+  # Post the patch-coverage artifact (diff-cover's Markdown report) to the PR
+  # as a github-actions[bot] comment, or edit the one posted before, so it's
+  # seen without opening the coverage job's summary or Codecov. Runs whenever
+  # the coverage job uploaded the report, even if a Codecov step then failed.
+  # Only for PRs from this repo: on a fork's or Dependabot's PR, GITHUB_TOKEN
+  # is read-only. Queued per PR, and posts only if HEAD_SHA is still the PR's
+  # head, so an older commit's run that finishes last can't overwrite a newer
+  # report. Needs no secrets, and installs nothing alongside its token: it runs
+  # the PR's repoutils from source (stdlib only) with `uv run --no-project`.
+  post-patch-coverage:
+    needs: coverage
+    if: ${{ !cancelled() && needs.coverage.outputs.patch-report == 'success' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    concurrency:
+      group: post-patch-coverage-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      # Keep version in step with pyproject.toml's [tool.uv] required-version.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.13.6"
+
+      # Keep just-version in step with the justfile's minimum-version.
+      - name: Install just
+        uses: extractions/setup-just@v4.0.0
+        with:
+          just-version: "1.58.0"
+
+      - name: Download patch coverage report
+        uses: actions/download-artifact@v8.0.2
+        with:
+          name: patch-coverage
+
+      - name: Post patch coverage to the PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        # GITHUB_TOKEN can't look up its own login, so name it.
+        run: just patch-coverage-post "$PR_NUMBER" --commit "$HEAD_SHA" --run-url "$RUN_URL" --author 'github-actions[bot]'
+
+  # Lists the files over pyproject.toml's line limit, for information only, in
+  # the job summary and, on PRs, as a github-actions[bot] comment edited in
+  # place, with the files the PR changes first. The report is cheap to make and
+  # repoutils needs only the standard library, so one job both makes and posts
+  # it: only same-repo, non-Dependabot PRs post; queued per PR; posts only if
+  # HEAD_SHA is still the PR's head; installs nothing.
+  long-files:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    concurrency:
+      group: long-files-${{ github.event.pull_request.number || github.run_id }}
+      cancel-in-progress: false
+
+    steps:
+      # The PR's head, so line counts and links match the PR's code. Full
+      # history for the merge base with the base branch.
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      # Keep version in step with pyproject.toml's [tool.uv] required-version.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.13.6"
+
+      # Keep just-version in step with the justfile's minimum-version.
+      - name: Install just
+        uses: extractions/setup-just@v4.0.0
+        with:
+          just-version: "1.58.0"
+
+      - name: List long files
+        env:
+          BASE: ${{ github.base_ref && format('origin/{0}', github.base_ref) || '' }}
+        run: just long-files --base "$BASE" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post report to the PR
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE: origin/${{ github.base_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        # GITHUB_TOKEN can't look up its own login, so name it.
+        run: just long-files --base "$BASE" --commit "$HEAD_SHA" --post "$PR_NUMBER" --author 'github-actions[bot]'
+
+  # Checks .github/workflows/actions.lock, which pins every action the
+  # workflows use, transitive ones included, to a commit. Generate it with
+  # `gh actions-lock` (github/gh-actions-lock) after changing any `uses:`.
+  actions-lock:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      # The release binary, checked against its SHA-256, so a moved tag or a
+      # replaced asset can't swap the verifier. `gh extension install --pin`
+      # takes only a release tag for a precompiled extension. The binary runs
+      # standalone, reading GH_TOKEN as the extension would.
+      - name: Install gh-actions-lock
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/gh-actions-lock" \
+            https://github.com/github/gh-actions-lock/releases/download/v0.4.1/linux-amd64
+          echo "39deb2fe714dbf74b073d8245fc7f3d50cd0eee18d5c0900e9e849ae933ae17e  $RUNNER_TEMP/gh-actions-lock" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/gh-actions-lock"
+
+      # Fails if actions.lock is missing an action a workflow uses, or a
+      # locked commit no longer verifies upstream.
+      - name: Verify actions.lock
+        run: '"$RUNNER_TEMP/gh-actions-lock" --verify'
+
+  # Runs on a Dependabot branch, whose bumped dependency we don't trust, so the
+  # write-capable DEPENDABOT_FIX_TOKEN is only exposed to the final push step:
+  # checkout doesn't persist credentials, and nothing installs the project or its
+  # dependencies (the recipes run repoutils from source with the standard
+  # library). GITHUB_TOKEN is read-only on Dependabot runs whatever this job asks
+  # for, so ask for read. The run its push triggers checks the fixed commit.
+  dependabot-fix:
+    if: github.event_name == 'pull_request' && github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check token configuration
+        env:
+          DEPENDABOT_FIX_TOKEN: ${{ secrets.DEPENDABOT_FIX_TOKEN }}
+        run: |
+          if [ -z "$DEPENDABOT_FIX_TOKEN" ]; then
+            echo "DEPENDABOT_FIX_TOKEN secret is not set" >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.head_ref }}
+          # Fetch the base branch and history too, for dependabot-relock's merge base.
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Keep version in step with pyproject.toml's [tool.uv] required-version.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.13.6"
+
+      # Keep just-version in step with the justfile's minimum-version.
+      - name: Install just
+        uses: extractions/setup-just@v4.0.0
+        with:
+          just-version: "1.58.0"
+
+      # Dependabot's uv may write uv.lock in a newer format than ours, changing
+      # lines unrelated to the bump; redo its version changes with our uv.
+      - name: Re-lock with the pinned uv
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: just dependabot-relock "origin/$BASE_REF"
+
+      - name: Update dependency minimum versions
+        run: just requirements-fix
+
+      - name: Update lockfile
+        run: uv lock
+
+      # Pushes with DEPENDABOT_FIX_TOKEN, not GITHUB_TOKEN, so the push triggers a
+      # new workflow run. If Dependabot updates the branch after checkout, the push
+      # fails; the run Dependabot's push triggers redoes the fix.
+      - name: Commit and push if needed
+        env:
+          DEPENDABOT_FIX_TOKEN: ${{ secrets.DEPENDABOT_FIX_TOKEN }}
+          HEAD_REF: ${{ github.head_ref }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml uv.lock
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: re-lock with pinned uv and sync dependency minimum versions"
+            git push "https://x-access-token:${DEPENDABOT_FIX_TOKEN}@github.com/${REPOSITORY}.git" "HEAD:refs/heads/${HEAD_REF}"
+          fi
+
+  # Tagging and releasing need a write-capable token, so they run in their own
+  # job, only for pushes to main, and never alongside pull request code.
+  release:
+    needs: [build, coverage, actions-lock]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          token: ${{ secrets.GH_ACTIONS_TOKEN }}
+          # The tag push below uses the stored token.
+          persist-credentials: true
+          fetch-depth: 0
+          fetch-tags: true
+
+      # Keep version in step with pyproject.toml's [tool.uv] required-version.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.13.6"
+
+      - name: Tag and release version
+        run: |
+          VERSION="$(uv version --short)"
+          TAG="v${VERSION}"
+          if git rev-parse "${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} already exists"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag -a "${TAG}" -m "Release ${TAG}"
+            git push origin "${TAG}"
+            echo "Created and pushed tag ${TAG}"
+          fi
+          # Checked separately so a rerun creates the release if an earlier run
+          # pushed the tag but failed to create it.
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists"
+          else
+            gh release create "${TAG}" --title "Release ${TAG}" --generate-notes
+            echo "Created GitHub release ${TAG}"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_ACTIONS_TOKEN }}

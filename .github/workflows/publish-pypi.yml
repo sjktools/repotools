@@ -1,0 +1,207 @@
+name: Publish
+
+# A v* tag push builds the release once, publishes it to TestPyPI, checks it
+# installs from there, and only then publishes the same files to PyPI and
+# checks it installs from PyPI. If a job fails, fix the cause and use "Re-run
+# failed jobs" on that run, which reuses the build job's files. That is safe
+# even if a failed publish job's upload got through: uv publish --check-url
+# skips any file the index already has with the same hash (keeping the
+# attestation its first upload carried), and uploads the rest. Don't re-run
+# all jobs once a publish job has uploaded anything: that rebuilds the files,
+# and if a rebuild doesn't match what the index has, uv publish stops with a
+# hash mismatch, as neither index accepts a file twice with different contents.
+#
+# A manual run (Actions > Publish > Run workflow, on any branch) publishes a
+# test release of that branch to TestPyPI only, as a dev version of the next
+# patch release numbered by the run's ID, e.g. 0.2.1.dev41908943359, as
+# TestPyPI never accepts the same version twice. It never reaches the PyPI
+# jobs, even on a tag. On a PR from this repo, the owner can start one for the
+# PR's branch by commenting just "/testpypi" (testpypi-comment.yml).
+#
+# TestPyPI and PyPI trusted publishing both name this file, so renaming it
+# means updating both trusted publishers.
+#
+# Both publish jobs share their setup, attest and check steps in the
+# prepare-publish composite action (.github/actions/prepare-publish), whose
+# steps run inside the job, so they still sign as this workflow. The
+# Attestations workflow (attestations.yml) runs the build and that action on
+# PRs that change this file or the action, without publishing; keep its build
+# job in step with this one's.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  # Builds in its own job, without the publish jobs' id-token: write, so the
+  # build steps can't mint a token to publish or sign with.
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      # Keep version in step with pyproject.toml's [tool.uv] required-version.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.13.6"
+
+      - name: Check tag matches version
+        if: github.event_name == 'push'
+        run: |
+          VERSION="$(uv version --short)"
+          if [ "${GITHUB_REF_NAME}" != "v${VERSION}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match pyproject.toml version ${VERSION}"
+            exit 1
+          fi
+
+      # The run ID is unique across the repository, so each manual run gets its
+      # own version, which can't clash with the dev versions the old
+      # publish-testpypi.yml numbered by its run number. Re-running a run
+      # reuses its ID, so once its upload has succeeded, re-run only failed
+      # jobs or start a new run rather than re-running all jobs.
+      # --frozen leaves uv.lock alone; only the built package changes.
+      - name: Set dev version
+        if: github.event_name == 'workflow_dispatch'
+        run: uv version --frozen --bump patch --bump "dev=${GITHUB_RUN_ID}"
+
+      - name: Get version
+        id: version
+        run: echo "version=$(uv version --short)" >> "$GITHUB_OUTPUT"
+
+      - name: Build package
+        run: uv build
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+          # Re-running a failed release would otherwise fail on the artifact
+          # its first attempt uploaded.
+          overwrite: true
+
+  publish-testpypi:
+    needs: build
+    runs-on: ubuntu-latest
+    # The url is what the deployment's "View deployment" link opens: this
+    # release's own page, rather than the project's latest release.
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/project/repoutils/${{ needs.build.outputs.version }}/
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      # Installs uv and just, downloads dist/, attests it and checks every
+      # file has an attestation, with this workflow's identity.
+      - name: Prepare publish
+        uses: $/.github/actions/prepare-publish
+
+      # --check-url skips files TestPyPI already has with the same hash, so
+      # re-running this job after an upload that got through is safe.
+      - name: Publish to TestPyPI
+        run: >-
+          uv publish --verbose
+          --publish-url=https://test.pypi.org/legacy/
+          --check-url=https://test.pypi.org/simple/
+
+  # Checks the release installs from TestPyPI and runs, as users get it with uvx.
+  verify-testpypi:
+    needs: [build, publish-testpypi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      # Keep version in step with pyproject.toml's [tool.uv] required-version.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.13.6"
+
+      # Keep just-version in step with the justfile's minimum-version.
+      - name: Install just
+        uses: extractions/setup-just@v4.0.0
+        with:
+          just-version: "1.58.0"
+
+      - name: Check release installs from TestPyPI
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: just check-release "$VERSION" https://test.pypi.org/simple/
+
+  # Publishes the same files TestPyPI got, with fresh attestations, and only
+  # for a tag push: a manual run stops after verifying TestPyPI.
+  publish-pypi:
+    needs: [build, verify-testpypi]
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    # As for publish-testpypi, "View deployment" opens this release's page.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/repoutils/${{ needs.build.outputs.version }}/
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      # Installs uv and just, downloads dist/, attests it and checks every
+      # file has an attestation, with this workflow's identity.
+      - name: Prepare publish
+        uses: $/.github/actions/prepare-publish
+
+      # --check-url skips files PyPI already has with the same hash, so
+      # re-running this job after an upload that got through is safe.
+      - name: Publish to PyPI
+        run: uv publish --verbose --check-url=https://pypi.org/simple/
+
+  # Checks the release installs from PyPI and runs, as users get it with uvx.
+  verify-pypi:
+    needs: [build, publish-pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      # Keep version in step with pyproject.toml's [tool.uv] required-version.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.13.6"
+
+      # Keep just-version in step with the justfile's minimum-version.
+      - name: Install just
+        uses: extractions/setup-just@v4.0.0
+        with:
+          just-version: "1.58.0"
+
+      - name: Check release installs from PyPI
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: just check-release "$VERSION"

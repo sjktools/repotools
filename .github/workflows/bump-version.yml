@@ -1,0 +1,75 @@
+name: Bump Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump level'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          token: ${{ secrets.GH_ACTIONS_TOKEN }}
+          # The branch push below uses the stored token.
+          persist-credentials: true
+          ref: main
+          fetch-depth: 0
+
+
+      # Keep version in step with pyproject.toml's [tool.uv] required-version.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.13.6"
+
+      - name: Bump version
+        run: uv version --bump=${{ github.event.inputs.bump }}
+
+      - name: Get new version
+        id: get_version
+        run: |
+          VERSION="$(uv version --short)"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Create release branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b release-version-${{ steps.get_version.outputs.version }}
+
+      - name: Commit version bump
+        run: |
+          git add -u
+          git commit -m "Bump version to ${{ steps.get_version.outputs.version }}"
+
+      - name: Push branch
+        run: git push origin release-version-${{ steps.get_version.outputs.version }}
+
+      - name: Create pull request
+        run: |
+          gh pr create \
+            --base main \
+            --head release-version-${{ steps.get_version.outputs.version }} \
+            --title "Release version ${{ steps.get_version.outputs.version }}" \
+            --body "Bumps version to ${{ steps.get_version.outputs.version }} (${{ github.event.inputs.bump }} bump)."
+        env:
+          GH_TOKEN: ${{ secrets.GH_ACTIONS_TOKEN }}
+
+      - name: Enable automerge
+        run: gh pr merge --auto --squash release-version-${{ steps.get_version.outputs.version }}
+        env:
+          GH_TOKEN: ${{ secrets.GH_ACTIONS_TOKEN }}
