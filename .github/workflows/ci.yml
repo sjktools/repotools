@@ -318,7 +318,6 @@ jobs:
     permissions:
       contents: read
     outputs:
-      start: ${{ steps.commit.outputs.start }}
       head: ${{ steps.commit.outputs.head }}
 
     steps:
@@ -366,7 +365,6 @@ jobs:
           else
             git commit -m "chore: re-lock with pinned uv and sync dependency minimum versions"
             git bundle create "$RUNNER_TEMP/dependabot-fix.bundle" "$start..HEAD"
-            echo "start=$start" >> "$GITHUB_OUTPUT"
             echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           fi
 
@@ -379,9 +377,10 @@ jobs:
           retention-days: 1
 
   # A fresh runner that runs no code from the Dependabot branch: it checks out
-  # the commit dependabot-fix started from, fetches the bundled commit onto it
-  # and pushes it. DEPENDABOT_FIX_TOKEN needs only contents write, without the
-  # workflows permission, so a bundle can't change the workflows either.
+  # the PR head, fetches the bundled commit onto it, checks it changes only
+  # pyproject.toml and uv.lock, and pushes it. DEPENDABOT_FIX_TOKEN needs only
+  # contents write, without the workflows permission, so a bundle can't change
+  # the workflows either.
   dependabot-push:
     needs: dependabot-fix
     if: needs.dependabot-fix.outputs.head
@@ -399,9 +398,11 @@ jobs:
             exit 1
           fi
 
+      # The PR head from the event, not a dependabot-fix output, which code
+      # from the branch could have set.
       - uses: actions/checkout@v7.0.1
         with:
-          ref: ${{ needs.dependabot-fix.outputs.start }}
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
 
       - name: Download the fix
@@ -426,6 +427,18 @@ jobs:
           git fetch --no-tags "$bundle" HEAD
           if [ "$(git rev-parse FETCH_HEAD)" != "$HEAD_SHA" ]; then
             echo "::error::The bundle's head isn't the commit dependabot-fix made."
+            exit 1
+          fi
+          # dependabot-fix ran the bumped dependency's build code, so take only
+          # what it is meant to change: one commit on the PR head, touching
+          # nothing but pyproject.toml and uv.lock.
+          if [ "$(git rev-parse "FETCH_HEAD^@")" != "$(git rev-parse HEAD)" ]; then
+            echo "::error::The bundle isn't a single commit on the PR head."
+            exit 1
+          fi
+          if ! git diff --quiet HEAD FETCH_HEAD -- . ':(exclude)pyproject.toml' ':(exclude)uv.lock'; then
+            echo "::error::The bundle changes files other than pyproject.toml and uv.lock:"
+            git diff --name-only HEAD FETCH_HEAD -- . ':(exclude)pyproject.toml' ':(exclude)uv.lock'
             exit 1
           fi
           git -c core.hooksPath=/dev/null push \
