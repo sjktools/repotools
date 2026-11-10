@@ -1,0 +1,112 @@
+name: TestPyPI comment
+
+# A PR comment from the repo owner that is just "/testpypi" (whitespace aside)
+# starts a manual run of the Publish workflow (publish-pypi.yml) on the PR's
+# head branch. That is the same as Actions > Publish > Run workflow on that
+# branch: it publishes a dev version of the branch to TestPyPI, checks it
+# installs from there, and never reaches the PyPI jobs.
+#
+# issue_comment workflows always run main's copy of this file, so a change
+# to it only takes effect once merged.
+#
+# This job runs no code from the PR's branch: it has no checkout and no
+# id-token. A dispatch sent with GITHUB_TOKEN does start a run (one of the
+# exceptions to "events from GITHUB_TOKEN don't trigger workflows"), and the
+# TestPyPI trusted publisher trusts publish-pypi.yml and its testpypi
+# environment, not who dispatched it. Because a comment can cause a publish,
+# only the owner's comments count, and closed PRs and PRs from forks are
+# refused (a fork's branch isn't in this repo, so it can't be dispatched anyway).
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  dispatch:
+    # A cheap pre-filter; the exact-match check is in bash below, since
+    # expressions can't trim whitespace.
+    if: >-
+      github.event.issue.pull_request &&
+      github.event.comment.author_association == 'OWNER' &&
+      contains(github.event.comment.body, '/testpypi')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write # Dispatch publish-pypi.yml
+      pull-requests: write # React to the comment and reply with the run's link
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.issue.number }}
+      COMMENT_ID: ${{ github.event.comment.id }}
+      # Passed through env, never inlined with ${{ }}, so the comment can't
+      # inject shell code.
+      COMMENT_BODY: ${{ github.event.comment.body }}
+    steps:
+      - name: Check the comment is exactly /testpypi
+        id: match
+        run: |
+          # ^ and $ anchor the whole body, and [[:space:]] matches newlines and
+          # the \r of a comment written on GitHub.
+          if [[ "${COMMENT_BODY}" =~ ^[[:space:]]*/testpypi[[:space:]]*$ ]]; then
+            echo "matched=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "Comment isn't just /testpypi; ignoring it."
+          fi
+
+      - name: Find the PR's branch
+        id: pr
+        if: steps.match.outputs.matched == 'true'
+        run: |
+          pr="$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}")"
+          state="$(jq -r .state <<< "${pr}")"
+          head_repo="$(jq -r '.head.repo.full_name // ""' <<< "${pr}")"
+          head_ref="$(jq -r .head.ref <<< "${pr}")"
+          if [ "${state}" != "open" ]; then
+            echo "::error::PR #${PR_NUMBER} is ${state}; /testpypi only works on open PRs."
+            exit 1
+          fi
+          if [ "${head_repo}" != "${GH_REPO}" ]; then
+            echo "::error::PR #${PR_NUMBER}'s branch is in ${head_repo:-a deleted fork}, not ${GH_REPO}; /testpypi doesn't work on PRs from forks."
+            exit 1
+          fi
+          echo "ref=${head_ref}" >> "${GITHUB_OUTPUT}"
+
+      - name: Start the Publish workflow on the PR's branch
+        id: dispatch
+        if: steps.match.outputs.matched == 'true'
+        env:
+          REF: ${{ steps.pr.outputs.ref }}
+        run: |
+          # return_run_details makes the API answer with the new run's URL
+          # rather than an empty 204.
+          response="$(gh api -X POST "repos/${GH_REPO}/actions/workflows/publish-pypi.yml/dispatches" \
+            -f ref="${REF}" -F return_run_details=true)"
+          run_url=""
+          if [ -n "${response}" ]; then
+            run_url="$(jq -r '.html_url // ""' <<< "${response}")"
+          fi
+          echo "run_url=${run_url}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "Started a TestPyPI dev release of \`${REF}\` (PR #${PR_NUMBER})."
+            if [ -n "${run_url}" ]; then
+              echo
+              echo "Publish run: ${run_url}"
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: React and reply
+        if: steps.match.outputs.matched == 'true'
+        env:
+          RUN_URL: ${{ steps.dispatch.outputs.run_url }}
+          REF: ${{ steps.pr.outputs.ref }}
+        run: |
+          # The run has started; failing to say so is only worth a warning.
+          if ! gh api -X POST "repos/${GH_REPO}/issues/comments/${COMMENT_ID}/reactions" \
+              -f content=rocket --silent; then
+            echo "::warning::Couldn't react to the comment."
+          fi
+          if [ -n "${RUN_URL}" ]; then
+            if ! gh api -X POST "repos/${GH_REPO}/issues/${PR_NUMBER}/comments" \
+                -f body="Started a TestPyPI dev release of \`${REF}\`: ${RUN_URL}" --silent; then
+              echo "::warning::Couldn't reply with the run's link."
+            fi
+          fi

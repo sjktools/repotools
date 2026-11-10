@@ -1,0 +1,104 @@
+[project]
+name = "repotools"
+version = "0.1.0"
+description = "Repository tooling for Python projects that use uv, just and GitHub Actions"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+# Deliberately none: projects run repotools in CI jobs that hold write-capable
+# tokens or check out untrusted Dependabot branches, installing repotools alone
+# (`uv run --only-group repotools`), so it must stay standard library only.
+dependencies = []
+classifiers = [
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3",
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Topic :: Software Development :: Quality Assurance",
+]
+
+[project.urls]
+Repository = "https://github.com/sjktools/repotools"
+
+[project.scripts]
+repotools = "repotools.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "coverage>=7.17.2",
+    "diff-cover>=11.0.1",
+    "jactionlint>=2.5.0",
+    "mypy>=2.4.1",
+    "pytest>=9.2.0",
+    "pytest-cov>=7.1.0",
+    "pytest-xdist>=3.8.0",
+    "ruff>=0.17.4",
+]
+
+# repotools' own settings for repotools (it dogfoods its checks).
+[tool.repotools]
+default-branch = "main"
+
+[tool.repotools.long-files]
+include = ["*.py"]
+limit = 500
+
+# Refuse uv versions older than CI's, which may resolve or write uv.lock differently.
+# Keep in step with the setup-uv `version` in .github/workflows.
+[tool.uv]
+required-version = ">=0.13.6"
+# Development (the dev group's wheels in uv.lock) is supported on macOS and
+# Linux x86_64/aarch64 only; repotools itself is pure Python and runs anywhere.
+# `repotools check-lock-platforms` checks uv.lock keeps to these.
+environments = [
+    "sys_platform == 'darwin'",
+    "sys_platform == 'linux' and (platform_machine == 'x86_64' or platform_machine == 'aarch64')",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "PLC0415", "RUF100"]
+
+[tool.mypy]
+files = ["src", "tests"]
+strict = true
+mypy_path = "src"
+explicit_package_bases = true
+warn_unreachable = true
+disallow_any_unimported = true
+enable_error_code = [
+    "deprecated",
+    "exhaustive-match",
+    "ignore-without-code",
+    "mutable-override",
+    "possibly-undefined",
+    "redundant-expr",
+    "redundant-self",
+    "truthy-bool",
+    "truthy-iterable",
+    "unused-awaitable",
+    "explicit-override",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["error"]
+addopts = "-n auto"
+
+[tool.coverage.run]
+source = ["repotools"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+
+[tool.coverage.xml]
+output = "coverage.xml"
