@@ -81,7 +81,9 @@ CI's `actions-lock` job verifies it.
 
 Windows isn't supported for development, as `[tool.uv] environments` leaves it out of `uv.lock`, though repoutils itself is pure Python.
 On Dependabot PRs, the `dependabot-fix` job re-locks with our uv and syncs the dependency minimums.
-It pushes with the `DEPENDABOT_FIX_TOKEN` secret (a Dependabot secret with contents write), so the push triggers CI.
+The `dependabot-push` job then pushes the result with the `DEPENDABOT_FIX_TOKEN` secret (a Dependabot secret with contents write), so the push triggers CI.
+A job that runs a branch's code never references a write-capable token, as code from an earlier step could read it from a later one.
+It hands its commits, as a Git bundle artifact, to a separate push job that runs nothing from the branch (`fix.yml` does the same).
 
 Releases are cut from `main`.
 The Bump Version workflow opens a PR bumping `version` in `pyproject.toml`.
