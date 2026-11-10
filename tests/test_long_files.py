@@ -148,6 +148,10 @@ class LoadConfigTests(_GitRepoTestCase):
             'include = ["*.py"]\nlimit = true': "limit must be",
             'include = ["*.py"]\nlimit = 5\nlimits = { "a" = "b" }': "limits must map",
         }
+        with self.subTest("not a table"):
+            self.write("pyproject.toml", "[tool.repotools]\nlong-files = 1\n")
+            with self.assertRaisesRegex(ValueError, "must be a table"):
+                self.config()
         for body, message in cases.items():
             with self.subTest(body=body):
                 self.write("pyproject.toml", f"[tool.repotools.long-files]\n{body}\n" if body else "")
@@ -326,6 +330,13 @@ class MainTests(_GitRepoTestCase):
         code, _, err = self._run(["--base", "no-such-branch"])
         self.assertEqual(code, 1)
         self.assertIn("git merge-base no-such-branch HEAD failed", err)
+
+    def test_base_defaults_to_the_pr_base_then_the_default_branch(self) -> None:
+        for base_ref, expected in (("release", "origin/release"), ("", "origin/main")):
+            with self.subTest(base_ref=base_ref), mock.patch.dict("os.environ", {"GITHUB_BASE_REF": base_ref}):
+                code, _, err = self._run([])
+                self.assertEqual(code, 1)
+                self.assertIn(f"git merge-base {expected} HEAD failed", err)
 
     def test_bad_config_fails(self) -> None:
         self.write("pyproject.toml", "[tool.repotools.long-files]\nlimit = 0\n")

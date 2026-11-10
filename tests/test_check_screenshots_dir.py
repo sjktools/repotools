@@ -6,7 +6,9 @@ from collections.abc import Callable
 from pathlib import Path
 from unittest import TestCase
 
+from repotools import config
 from repotools.commands.check_screenshots_dir import main as screenshots_dir_main
+from repotools.commands.check_screenshots_dir import screenshots_dir
 
 SCREENSHOTS_GITIGNORE = b"# Screenshots written by `just screenshots`\n*\n!/.gitignore\n"
 
@@ -94,3 +96,10 @@ class CheckScreenshotsDirTests(TestCase):
         code, stdout = self._run(setup_staged)
         self.assertEqual(code, 1)
         self.assertIn("- screenshots/.gitignore has unexpected staged contents", stdout)
+
+    def test_rejects_a_bad_configured_directory(self) -> None:
+        for value in ('"/"', '""', "1"):
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as tmp:
+                (Path(tmp) / "pyproject.toml").write_text(f"[tool.repotools.screenshots]\ndir = {value}\n")
+                with self.assertRaisesRegex(config.ConfigError, "dir must be a non-empty string"):
+                    screenshots_dir(Path(tmp))
