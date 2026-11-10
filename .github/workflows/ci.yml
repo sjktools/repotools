@@ -298,9 +298,9 @@ jobs:
       # prints it, to be committed; remove this step before merging.
       - name: Generate actions.lock (temporary)
         run: |
-          "$RUNNER_TEMP/gh-actions-lock" || true
+          "$RUNNER_TEMP/gh-actions-lock" --migrate-local-actions || true
           echo "----- BEGIN actions.lock -----"
-          cat .github/workflows/actions.lock
+          cat .github/workflows/actions.lock || true
           echo "----- END actions.lock -----"
           git diff -- .github/
 
