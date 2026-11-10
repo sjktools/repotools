@@ -109,7 +109,7 @@ jobs:
       # Installs uv and just, downloads dist/, attests it and checks every
       # file has an attestation, with this workflow's identity.
       - name: Prepare publish
-        uses: ./.github/actions/prepare-publish
+        uses: $/.github/actions/prepare-publish
 
       # --check-url skips files TestPyPI already has with the same hash, so
       # re-running this job after an upload that got through is safe.
@@ -170,7 +170,7 @@ jobs:
       # Installs uv and just, downloads dist/, attests it and checks every
       # file has an attestation, with this workflow's identity.
       - name: Prepare publish
-        uses: ./.github/actions/prepare-publish
+        uses: $/.github/actions/prepare-publish
 
       # --check-url skips files PyPI already has with the same hash, so
       # re-running this job after an upload that got through is safe.

@@ -86,4 +86,4 @@ jobs:
 
       # The same steps the publish jobs run before uv publish.
       - name: Prepare publish
-        uses: ./.github/actions/prepare-publish
+        uses: $/.github/actions/prepare-publish
