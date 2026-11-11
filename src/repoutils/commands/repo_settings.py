@@ -183,37 +183,49 @@ def repo_url(repo: str) -> str:
     return f"{github.API_URL}/repos/{repo}"
 
 
+def _dump_value(setting: Setting, existing: dict[str, Any]) -> bool | str:
+    """setting's value in existing as TABLE writes it, raising ValueError
+    with the reason if GitHub didn't return it or TABLE can't give it."""
+    if setting.api_field not in existing:
+        raise ValueError(f"GitHub didn't return {setting.api_field}")
+    raw = existing[setting.api_field]
+    # An enum's value is looked up, so must be hashable before to_config.
+    value = setting.to_config(raw) if setting.choices is None or isinstance(raw, str) else None
+    if (
+        not isinstance(value, bool | str)
+        or type(value) is not setting.kind
+        or (setting.choices is not None and value not in setting.choices)
+    ):
+        raise ValueError(f"GitHub's value {raw!r} isn't one {TABLE} can give")
+    return value
+
+
 def dump_toml(existing: dict[str, Any]) -> tuple[str, list[str]]:
     """GitHub's repository settings as TABLE (with a sub-table for each merge
     method), and a note on each setting left out because GitHub didn't return
     it or returned a value TABLE can't give."""
+    values: dict[str, bool | str] = {}
+    notes: dict[str, str] = {}
+    for setting in SETTINGS:
+        try:
+            values[setting.api_field] = _dump_value(setting, existing)
+        except ValueError as e:
+            notes[setting.api_field] = str(e)
+    # check sends a message with its title, so a message is only given with its title.
+    for title, message in PAIRS:
+        if message in values and title not in values:
+            del values[message]
+            notes[message] = "it can't be checked without its title"
     top: list[str] = []
     tables: dict[str, list[str]] = {}
     skipped: list[str] = []
-    dumped: set[str] = set()
-    titles = {message: title for title, message in PAIRS}
     for setting in SETTINGS:
-        if setting.api_field not in existing:
-            skipped.append(f"{setting.key}: GitHub didn't return {setting.api_field}")
+        if setting.api_field in notes:
+            skipped.append(f"{setting.key}: {notes[setting.api_field]}")
             continue
-        raw = existing[setting.api_field]
-        # An enum's value is looked up, so must be hashable before to_config.
-        value = setting.to_config(raw) if setting.choices is None or isinstance(raw, str) else None
-        if (
-            not isinstance(value, bool | str)
-            or type(value) is not setting.kind
-            or (setting.choices is not None and value not in setting.choices)
-        ):
-            skipped.append(f"{setting.key}: GitHub's value {raw!r} isn't one {TABLE} can give")
-            continue
-        title = titles.get(setting.api_field)
-        if title is not None and title not in dumped:
-            # check sends a message with its title, so needs GitHub's title too.
-            skipped.append(f"{setting.key}: it can't be checked without its title")
-            continue
-        dumped.add(setting.api_field)
         table, _, key = setting.key.rpartition(".")
-        (tables.setdefault(table, []) if table else top).append(f"{key} = {config.toml_value(value)}\n")
+        line = f"{key} = {config.toml_value(values[setting.api_field])}\n"
+        (tables.setdefault(table, []) if table else top).append(line)
     sections = [f"{TABLE}\n" + "".join(top)]
     sections += [f"{TABLE[:-1]}.{table}]\n" + "".join(lines) for table, lines in tables.items()]
     return "\n".join(sections), skipped

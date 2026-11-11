@@ -380,3 +380,11 @@ def test_dump_leaves_out_what_it_cant_give(
         "Left out squash-merge.message: it can't be checked without its title\n"
     )
     assert _run(tmp_path, monkeypatch, FakeGitHub(existing), ["check"], out) == 0
+
+
+def test_dump_doesnt_depend_on_the_order_of_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A message listed before its title is still given with it.
+    monkeypatch.setattr(repo_settings, "SETTINGS", list(reversed(repo_settings.SETTINGS)))
+    text, skipped = repo_settings.dump_toml(EVERYTHING)
+    assert skipped == []
+    assert 'message = "pr-body"\n' in text and 'message = "pr-title"\n' in text
