@@ -72,6 +72,19 @@ def _get_or_none(url: str, token: str) -> Any:
         return None
 
 
+def _pages(url: str, token: str, key: str | None = None) -> list[dict[str, Any]]:
+    """Every item of a paginated list (in the response's key, if given), or none if GitHub answers 404."""
+    items: list[dict[str, Any]] = []
+    page = 1
+    while True:
+        found = _get_or_none(f"{url}?per_page={PER_PAGE}&page={page}", token)
+        batch = (found or {}).get(key, []) if key else found or []
+        items += batch
+        if len(batch) < PER_PAGE:
+            return items
+        page += 1
+
+
 def repo_rulesets(repo: str, token: str) -> list[dict[str, Any]]:
     """A summary of each of the repository's own branch rulesets."""
     rulesets: list[dict[str, Any]] = []
@@ -140,8 +153,8 @@ def discover(repo: str, token: str, rulesets: list[dict[str, Any]]) -> Names:
         for branch in branches:
             ref = urllib.parse.quote(branch, safe="/")
             for kind in ("check-runs", "check-suites"):
-                found = _get_or_none(f"{github.API_URL}/repos/{repo}/commits/{ref}/{kind}?per_page={PER_PAGE}", token)
-                for item in (found or {}).get(kind.replace("-", "_"), []):
+                url = f"{github.API_URL}/repos/{repo}/commits/{ref}/{kind}"
+                for item in _pages(url, token, kind.replace("-", "_")):
                     if item.get("app"):
                         names.apps[item["app"]["slug"]] = item["app"]["id"]
         for slug in KNOWN_APPS:
@@ -150,8 +163,8 @@ def discover(repo: str, token: str, rulesets: list[dict[str, Any]]) -> Names:
                 if app is not None:
                     names.apps[slug] = app["id"]
     if team_ids:
-        teams = _get_or_none(f"{github.API_URL}/orgs/{repo.split('/', 1)[0]}/teams?per_page={PER_PAGE}", token)
-        names.teams = {team["slug"]: team["id"] for team in teams or []}
+        teams = _pages(f"{github.API_URL}/orgs/{repo.split('/', 1)[0]}/teams", token)
+        names.teams = {team["slug"]: team["id"] for team in teams}
     return names
 
 

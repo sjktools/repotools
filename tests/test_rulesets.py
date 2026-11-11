@@ -100,7 +100,8 @@ class FakeGitHub:
         if path == "/repos/o/r":
             return {"default_branch": "main"}
         if path.startswith("/repos/o/r/commits/main/check-runs"):
-            return {"check_runs": [{"app": app} for app in self.check_apps]}
+            page = int(path.rsplit("page=", 1)[1])
+            return {"check_runs": [{"app": app} for app in self.check_apps[(page - 1) * 100 : page * 100]]}
         if path.startswith("/repos/o/r/commits/main/check-suites"):
             return {"check_suites": [{"app": None}]}
         raise _not_found(url)
@@ -192,7 +193,7 @@ def test_fail_on_unexpected(
 def test_unknown_slug(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], bypass: str, error: str
 ) -> None:
-    config = f"[tool.repoutils.rulesets.main]\nbypass = [{bypass}]\n"
+    config = f"[tool.repoutils.rulesets.main]\ninclude = ['main']\nbypass = [{bypass}]\n"
     assert _run(tmp_path, monkeypatch, FakeGitHub(), ["check"], config) == 1
     assert capsys.readouterr().err == error
 
@@ -201,6 +202,7 @@ def test_each_slug_is_looked_up_once(tmp_path: Path, monkeypatch: pytest.MonkeyP
     gh = FakeGitHub()
     config = """
 [tool.repoutils.rulesets.main]
+include = ["main"]
 bypass = [
     { app = "dependabot" },
     { app = "dependabot", mode = "exempt" },
@@ -238,6 +240,16 @@ def test_dump(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.Ca
     assert out.startswith('[tool.repoutils.rulesets.main]\ninclude = ["~DEFAULT_BRANCH"]\n')
     # Pasted into pyproject.toml, check passes.
     assert _run(tmp_path, monkeypatch, gh, ["check", "--fail-on-unexpected"], out) == 0
+
+
+def test_dump_reads_every_page_of_check_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    gh = FakeGitHub(MATCHING)
+    gh.check_apps = [{"id": i, "slug": f"app{i}"} for i in range(100)] + gh.check_apps
+    gh.apps.pop("github-actions")
+    assert _run(tmp_path, monkeypatch, gh, ["dump"], "") == 0
+    assert '{ context = "build", app = "github-actions" }' in capsys.readouterr().out
 
 
 def test_dump_finds_a_known_app_or_warns(
@@ -286,13 +298,15 @@ def test_malformed_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsy
 
 
 def test_paginates(monkeypatch: pytest.MonkeyPatch) -> None:
-    pages = {1: [{"id": i, "name": f"r{i}", "target": "branch"} for i in range(100)], 2: [TAG_RULESET]}
+    pages = {1: [{"id": i, "name": f"r{i}", "target": "branch"} for i in range(100)], 2: [TAG_RULESET, OTHER]}
 
     def request(method: str, url: str, token: str, **kwargs: Any) -> Any:
         return pages[int(url.rsplit("page=", 1)[1])]
 
     monkeypatch.setattr(github, "request", request)
-    assert len(rulesets.repo_rulesets("o/r", "tok")) == 100
+    found = rulesets.repo_rulesets("o/r", "tok")
+    assert len(found) == 101
+    assert found[-1]["name"] == "other"
 
 
 def test_no_token(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:

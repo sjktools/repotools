@@ -210,7 +210,7 @@ def _load_actor(where: str, entry: Any) -> dict[str, Any]:
     if not isinstance(entry, dict):
         raise config.ConfigError(f"{where} must be a list of tables")
     mode = entry.get("mode", "always")
-    if mode not in BYPASS_MODES:
+    if not isinstance(mode, str) or mode not in BYPASS_MODES:
         raise config.ConfigError(f"{where} mode must be one of {', '.join(map(config.toml_string, BYPASS_MODES))}")
     actor = {k: v for k, v in entry.items() if k != "mode"}
     if "app-id" in actor or "team-id" in actor:
@@ -218,7 +218,7 @@ def _load_actor(where: str, entry: Any) -> dict[str, Any]:
     if len(actor) != 1 or next(iter(actor)) not in ACTOR_KEYS:
         raise config.ConfigError(f"{where}: each entry needs exactly one of {', '.join(ACTOR_KEYS)}, and maybe mode")
     ((key, value),) = actor.items()
-    if key == "role" and not (value in ROLES or (type(value) is int and value > 0)):
+    if key == "role" and not ((isinstance(value, str) and value in ROLES) or (type(value) is int and value > 0)):
         raise config.ConfigError(f'{where} role must be "admin", "maintain", "write" or a custom role\'s ID')
     if key in ("app", "team") and not (isinstance(value, str) and value):
         raise config.ConfigError(f"{where} {key} must be a slug")
@@ -263,6 +263,8 @@ def _load_ruleset(where: str, entry: dict[str, Any]) -> dict[str, Any]:
             loaded[key] = _load_rule(f"{where} rules.{key}", _snake(key), {} if value is True else value)
     if loaded:
         ruleset["rules"] = loaded
+    if "include" not in ruleset:
+        raise config.ConfigError(f'{where} needs include, the branches it targets (e.g. ["~DEFAULT_BRANCH"])')
     return ruleset
 
 
@@ -451,4 +453,6 @@ def dump_toml(rulesets: Iterable[dict[str, Any]], names: Names) -> tuple[str, li
             if "actor-type" in entry:
                 warnings.append(f"{name}: repoutils doesn't know the bypass actor type {entry['actor-type']}")
         warnings += [f"{name}: repoutils doesn't know the rule {key}" for key in rules if _snake(key) not in RULES]
+        if "include" not in values:
+            warnings.append(f"{name}: it targets no branch, so check refuses it without an include")
     return "\n".join(entries), list(dict.fromkeys(warnings))

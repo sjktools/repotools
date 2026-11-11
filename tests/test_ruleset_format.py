@@ -27,6 +27,7 @@ required-status-checks = [{ context = "test", app = "github-actions" }, { contex
 
 [tool.repoutils.rulesets."Release tags"]
 enforcement = "disabled"
+include = ["~ALL"]
 exclude = ["old"]
 bypass = [{ org-admin = true }, { deploy-keys = true }, { role = 7 }]
 
@@ -69,7 +70,7 @@ def test_load_keeps_only_non_defaults(tmp_path: Path) -> None:
 
 def test_no_rulesets(tmp_path: Path) -> None:
     assert _load(tmp_path, "") == {}
-    assert _load(tmp_path, "[tool.repoutils.rulesets.empty]\n") == {"empty": {}}
+    assert _load(tmp_path, "[tool.repoutils.rulesets.x]\ninclude = ['~ALL']\n") == {"x": {"include": ["~ALL"]}}
 
 
 def test_to_github_sends_every_parameter(tmp_path: Path) -> None:
@@ -164,6 +165,7 @@ def test_dump_warns_about_what_check_refuses() -> None:
         "x: couldn't find the slug of app 99, so gave its ID, which check refuses: replace it with app = <its slug>",
         "x: couldn't find the slug of team 98, so gave its ID, which check refuses: replace it with team = <its slug>",
         "x: repoutils doesn't know the rule brand-new-rule",
+        "x: it targets no branch, so check refuses it without an include",
     ]
 
 
@@ -188,6 +190,9 @@ def test_diff() -> None:
         ("main.colour = 1", "unknown setting(s): colour"),
         ("main.enforcement = 'on'", 'enforcement must be one of "active", "evaluate", "disabled"'),
         ("main.include = 'main'", "include must be a list of strings"),
+        ("main.include = []", 'needs include, the branches it targets (e.g. ["~DEFAULT_BRANCH"])'),
+        ("main.bypass = [{ role = 'admin', mode = ['always'] }]", "mode must be one of"),
+        ("main.bypass = [{ role = [] }]", 'role must be "admin"'),
         ("main.bypass = {}", "bypass must be a list of tables"),
         ("main.bypass = ['admin']", "bypass must be a list of tables"),
         (

@@ -171,7 +171,7 @@ Tag rulesets, push rulesets, rulesets the repository inherits from its organizat
 | Setting | Values | On GitHub |
 |---|---|---|
 | `enforcement` | `"active"` (the default), `"evaluate"` or `"disabled"` | Whether the ruleset is enforced. |
-| `include`, `exclude` | branch name patterns, such as `["main", "release/*"]`, or `"~DEFAULT_BRANCH"` or `"~ALL"` | The branches it targets; `refs/heads/` is optional. |
+| `include`, `exclude` | branch name patterns, such as `["main", "release/*"]`, or `"~DEFAULT_BRANCH"` or `"~ALL"` | The branches it targets; `refs/heads/` is optional, and `include` is required, as a ruleset that targets no branch does nothing. |
 | `bypass` | a list of tables, each with one of `role` (`"admin"`, `"maintain"`, `"write"` or a custom role's ID), `app` (a GitHub App's slug), `team` (a team's slug), `org-admin = true` or `deploy-keys = true`, and optionally `mode` (`"always"`, the default, `"pull-request"` or `"exempt"`) | Who can bypass it. |
 | `rules.<rule>` | `true`, or a table of the rule's parameters | Each rule that's on. |
 
@@ -186,7 +186,7 @@ It never deletes a ruleset.
 
 Both need a token that can administer the repository (a fine-grained token with Administration permission: write for `ensure`, read for `check` and `dump`), as GitHub shows a ruleset's bypass list only to one, and GitHub Actions' `GITHUB_TOKEN` can't be given it.
 
-`repoutils rulesets dump` prints every branch ruleset the repository has as these tables, for you to paste into `pyproject.toml`; pasted unchanged, `check --fail-on-unexpected` passes.
+`repoutils rulesets dump` prints every branch ruleset the repository has as these tables, for you to paste into `pyproject.toml`; pasted unchanged, `check --fail-on-unexpected` passes, unless `dump` warned about something `check` refuses.
 With `--from-file`, it prints the rulesets in JSON files exported from GitHub's ruleset page instead, so you can design a ruleset there (on any repository) and convert it.
 GitHub has no API that gives a GitHub App's slug from its ID, so `dump` finds the slugs of the apps that ran checks on the latest commit of the default branch, and of each branch the rulesets name; it gives an app (or team) it can't find by its ID and warns, and you replace that with its slug.
 It doesn't read `pyproject.toml` or change it.
