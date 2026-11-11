@@ -272,3 +272,36 @@ def test_bad_config_through_main(
     assert _run(tmp_path, monkeypatch, gh, ["ensure"], "[[tool.repoutils.labels]]\nname = 'a'\ncolor = 'red'\n") == 1
     assert gh.calls == []
     assert "color must be six hex digits" in capsys.readouterr().err
+
+
+TRICKY = [
+    *MATCHING,
+    _label("no description", "C2E0C6", ""),
+    _label('quote " and \\ backslash', "000000", "Line\nbreak, tab\t, DEL \x7f and é"),
+]
+
+
+def test_dump_round_trips(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    # dump doesn't need pyproject.toml to define any labels.
+    assert _run(tmp_path, monkeypatch, FakeGitHub(TRICKY), ["dump"], "") == 0
+    out = capsys.readouterr().out
+    assert out.startswith('[[tool.repoutils.labels]]\nname = "bug"\ncolor = "d73a4a"\n')
+    assert '[[tool.repoutils.labels]]\nname = "no description"\ncolor = "c2e0c6"\n\n' in out
+    # Pasted into pyproject.toml, it defines every label exactly as GitHub has it.
+    gh = FakeGitHub(TRICKY)
+    assert _run(tmp_path, monkeypatch, gh, ["check", "--strict"], out) == 0
+    assert capsys.readouterr().out == "All 6 label(s) in o/r match pyproject.toml.\n"
+    assert gh.writes() == []
+
+
+def test_dump_reads_every_page(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(labels, "PER_PAGE", 2)
+    assert _run(tmp_path, monkeypatch, FakeGitHub(MATCHING), ["dump"], "") == 0
+    assert capsys.readouterr().out.count("[[tool.repoutils.labels]]") == 4
+
+
+def test_dump_no_labels(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    assert _run(tmp_path, monkeypatch, FakeGitHub([]), ["dump"], "") == 0
+    assert capsys.readouterr() == ("", "o/r has no labels.\n")

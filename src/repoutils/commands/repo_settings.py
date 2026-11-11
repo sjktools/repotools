@@ -14,7 +14,11 @@ and ensure never sends them.
 
 ``ensure`` changes every setting that differs, in one request, and fails if
 GitHub doesn't apply one. ``check`` fails exactly when ``ensure`` would change
-something. Stdlib-only, like every repoutils command."""
+something.
+
+``dump`` prints every setting the repository has as the table, to paste into
+pyproject.toml (``check`` then passes) and edit. Stdlib-only, like every
+repoutils command."""
 
 import argparse
 import os
@@ -179,6 +183,37 @@ def repo_url(repo: str) -> str:
     return f"{github.API_URL}/repos/{repo}"
 
 
+def dump_toml(existing: dict[str, Any]) -> tuple[str, list[str]]:
+    """GitHub's repository settings as TABLE (with a sub-table for each merge
+    method), and a note on each setting left out because GitHub didn't return
+    it or returned a value TABLE can't give."""
+    top: list[str] = []
+    tables: dict[str, list[str]] = {}
+    skipped: list[str] = []
+    for setting in SETTINGS:
+        if setting.api_field not in existing:
+            skipped.append(f"{setting.key}: GitHub didn't return {setting.api_field}")
+            continue
+        value = setting.to_config(existing[setting.api_field])
+        valid = isinstance(value, bool | str) and type(value) is setting.kind
+        if not valid or (setting.choices is not None and value not in setting.choices):
+            skipped.append(f"{setting.key}: GitHub's value {existing[setting.api_field]!r} isn't one {TABLE} can give")
+            continue
+        table, _, key = setting.key.rpartition(".")
+        (tables.setdefault(table, []) if table else top).append(f"{key} = {config.toml_value(value)}\n")
+    sections = [f"{TABLE}\n" + "".join(top)]
+    sections += [f"{TABLE[:-1]}.{table}]\n" + "".join(lines) for table, lines in tables.items()]
+    return "\n".join(sections), skipped
+
+
+def dump(repo: str, token: str) -> int:
+    text, skipped = dump_toml(github.request("GET", repo_url(repo), token))
+    print(text, end="")
+    for note in skipped:
+        print(f"Left out {note}", file=sys.stderr)
+    return 0
+
+
 def check(repo: str, token: str, settings: dict[Setting, Any], *, exit_zero: bool) -> int:
     p = plan(settings, github.request("GET", repo_url(repo), token))
     for change in p.changes:
@@ -218,14 +253,19 @@ def main(argv: list[str]) -> int:
         epilog="Uses $GITHUB_TOKEN, defaulting to `gh auth token`; ensure needs a token that can administer "
         "the repository, which Actions' GITHUB_TOKEN can't be given.",
     )
-    subparsers = parser.add_subparsers(dest="mode", required=True, metavar="{check,ensure}")
+    subparsers = parser.add_subparsers(dest="mode", required=True, metavar="{check,ensure,dump}")
     check_parser = subparsers.add_parser(
         "check", help="fail if ensure would change anything", description="Fail if ensure would change anything."
     )
     ensure_parser = subparsers.add_parser(
         "ensure", help="change settings to match", description="Change settings to match."
     )
-    for sub in (check_parser, ensure_parser):
+    dump_parser = subparsers.add_parser(
+        "dump",
+        help="print the repository's settings as a pyproject.toml table",
+        description=f"Print every setting the repository has as {TABLE}, to paste into pyproject.toml.",
+    )
+    for sub in (check_parser, ensure_parser, dump_parser):
         sub.add_argument(
             "--repo",
             default=os.environ.get("GITHUB_REPOSITORY"),
@@ -239,12 +279,15 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
 
     try:
-        settings = load_settings()
-        if not settings:
+        # dump doesn't read pyproject.toml, so it works before the table is there.
+        settings = {} if args.mode == "dump" else load_settings()
+        if not settings and args.mode != "dump":
             print(f"No repository settings are defined: add {TABLE} to pyproject.toml.", file=sys.stderr)
             return 1
         token = os.environ.get("GITHUB_TOKEN") or github.gh_output("auth", "token")
         repo = args.repo or github.gh_output("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner")
+        if args.mode == "dump":
+            return dump(repo, token)
         if args.mode == "check":
             return check(repo, token, settings, exit_zero=args.exit_zero)
         return ensure(repo, token, settings)
