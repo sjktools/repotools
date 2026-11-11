@@ -50,18 +50,18 @@ limit = 500
 # The repository settings `repoutils repo-settings` checks or changes.
 [tool.repoutils.repo-settings]
 issues = true
-projects = true
-wiki = true
+projects = false
+wiki = false
 discussions = false
 downloads = false
 pull-requests = true
 pull-request-creation = "collaborators"
-merge-commit = { allow = false, title = "merge-message", message = "pr-title" }
+merge-commit = { allow = false }
 squash-merge = { allow = true, title = "pr-title", message = "blank" }
 rebase-merge = { allow = false }
-allow-auto-merge = false
-allow-update-branch = false
-delete-branch-on-merge = false
+allow-auto-merge = true
+allow-update-branch = true
+delete-branch-on-merge = true
 require-web-commit-signoff = false
 
 # The issue and PR labels `repoutils labels` checks or creates, as exolot and
