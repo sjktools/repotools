@@ -199,7 +199,7 @@ def unexpected_labels(labels: Iterable[Label], existing: Iterable[dict[str, Any]
 
 
 def check(
-    repo: str, token: str, labels: list[Label], *, strict: bool, exit_zero: bool, fail_on_unexpected: bool = False
+    repo: str, token: str, labels: list[Label], *, strict: bool, exit_zero: bool, fail_on_unexpected: bool
 ) -> int:
     existing = repo_labels(repo, token)
     results = plans(labels, existing, strict=strict)
@@ -272,7 +272,7 @@ def main(argv: list[str]) -> int:
     check_parser.add_argument(
         "--exit-zero",
         action="store_true",
-        help="exit 0 even if labels need ensure (still exit 1 on an error, unlike `|| true`)",
+        help="exit 0 even if labels differ (still exit 1 on an error, unlike `|| true`)",
     )
     check_parser.add_argument(
         "--fail-on-unexpected",
