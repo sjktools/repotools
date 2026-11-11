@@ -48,7 +48,7 @@ Run `repoutils --help` for the list, and `repoutils <command> --help` for a comm
 | `rulesets` | `rulesets check` fails if the repository lacks a branch ruleset `pyproject.toml` defines, or one differs; `rulesets ensure` creates or replaces it; `rulesets dump` prints the repository's branch rulesets to paste in. |
 | `check-attestations` | Fails unless every distribution in `dist/` has a PEP 740 publish attestation. |
 
-The commands that post to a PR, `labels`, `repo-settings` and `rulesets` read `$GITHUB_TOKEN`, falling back to `gh auth token`.
+The commands that post to a PR read `$GITHUB_TOKEN`, falling back to `gh auth token`, as do `labels`, `repo-settings` and `rulesets`.
 
 ## Configuration
 
@@ -185,6 +185,7 @@ It never deletes a ruleset.
 `repoutils rulesets check` changes nothing, and fails exactly when `ensure` would change something; `--exit-zero` and `--fail-on-unexpected` work as they do for `labels check`, with `--fail-on-unexpected` failing on branch rulesets `pyproject.toml` doesn't define.
 
 Both need a token that can administer the repository (a fine-grained token with Administration permission: write for `ensure`, read for `check` and `dump`), as GitHub shows a ruleset's bypass list only to one, and GitHub Actions' `GITHUB_TOKEN` can't be given it.
+A ruleset whose bypass list names a team also needs the organization's Members read permission, to look the team up.
 
 `repoutils rulesets dump` prints every branch ruleset the repository has as these tables, for you to paste into `pyproject.toml`; pasted unchanged, `check --fail-on-unexpected` passes, unless `dump` warned about something `check` refuses.
 With `--from-file`, it prints the rulesets in JSON files exported from GitHub's ruleset page instead, so you can design a ruleset there (on any repository) and convert it.

@@ -65,12 +65,14 @@ class FakeGitHub:
         self.rulesets = {r["id"]: copy.deepcopy(r) for r in existing}
         self.ignored = ignored
         self.writes: list[tuple[str, str, Any]] = []
+        self.reads: list[str] = []
         self.apps = {"github-actions": 15368, "dependabot": 29110}
         self.check_apps = [{"id": 15368, "slug": "github-actions"}]
 
     def __call__(self, method: str, url: str, token: str, *, json_body: Any = None, **kwargs: object) -> Any:
         assert token == "tok"
         path = url.removeprefix(API)
+        self.reads.append(path)
         if method != "GET":
             self.writes.append((method, path, json_body))
             stored = {k: v for k, v in json_body.items()} | {"source_type": "Repository"}
@@ -212,6 +214,16 @@ bypass = [
 """
     assert _run(tmp_path, monkeypatch, gh, ["ensure"], config) == 0
     assert [a["actor_id"] for a in gh.writes[0][2]["bypass_actors"]] == [29110, 29110, 42, 42]
+    assert gh.reads.count("/apps/dependabot") == 1
+    assert gh.reads.count("/orgs/o/teams/core") == 1
+
+
+def test_dump_from_a_malformed_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (tmp_path / "x.json").write_text("[1]")
+    assert _run(tmp_path, monkeypatch, FakeGitHub(), ["dump", "--from-file", str(tmp_path / "x.json")], "") == 1
+    assert capsys.readouterr().err == f"{tmp_path / 'x.json'} must hold a ruleset JSON object, or a list of them\n"
 
 
 def test_other_http_errors_propagate(

@@ -173,6 +173,8 @@ def dump(repo: str, token: str, files: list[str]) -> int:
         rulesets = []
         for path in files:
             loaded = json.loads(Path(path).read_text())
+            if not all(isinstance(r, dict) for r in (loaded if isinstance(loaded, list) else [loaded])):
+                raise ValueError(f"{path} must hold a ruleset JSON object, or a list of them")
             rulesets += loaded if isinstance(loaded, list) else [loaded]
         for r in [r for r in rulesets if r.get("target", "branch") != "branch"]:
             print(f"Left out {r.get('name')!r}: it's a {r.get('target')} ruleset, not a branch one", file=sys.stderr)

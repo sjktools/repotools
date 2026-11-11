@@ -12,6 +12,7 @@ jobs:
   test:
     strategy:
       fail-fast: false
+      # main's ruleset (in pyproject.toml) requires each of these jobs by name.
       matrix:
         # Not Windows: [tool.uv] environments leaves it out of uv.lock.
         os: [ubuntu-latest, macos-latest]
