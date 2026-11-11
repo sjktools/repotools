@@ -16,7 +16,9 @@ doesn't define are never changed or deleted.
 
 ``check`` fails exactly when ``ensure`` (with the same ``--strict``) would
 change something, and reports the differences ``ensure`` would leave alone
-without failing.
+without failing. With ``--fail-on-unexpected`` it also fails on labels the
+repository has that pyproject.toml doesn't define, which ``ensure`` leaves
+alone.
 
 ``dump`` prints every label the repository has as ``[[tool.repoutils.labels]]``
 entries, to paste into pyproject.toml (``check --strict`` then passes) and
@@ -190,15 +192,33 @@ def dump(repo: str, token: str) -> int:
     return 0
 
 
-def check(repo: str, token: str, labels: list[Label], *, strict: bool, exit_zero: bool) -> int:
-    results = plans(labels, repo_labels(repo, token), strict=strict)
+def unexpected_labels(labels: Iterable[Label], existing: Iterable[dict[str, Any]]) -> list[str]:
+    """The names of the labels in existing that labels doesn't define, ignoring case."""
+    ours = {label.name.lower() for label in labels}
+    return [label["name"] for label in existing if label["name"].lower() not in ours]
+
+
+def check(
+    repo: str, token: str, labels: list[Label], *, strict: bool, exit_zero: bool, fail_on_unexpected: bool = False
+) -> int:
+    existing = repo_labels(repo, token)
+    results = plans(labels, existing, strict=strict)
     for p in results:
         for line in _report(p, done=False):
             print(line)
+    unexpected = unexpected_labels(labels, existing) if fail_on_unexpected else []
+    for name in unexpected:
+        print(f"{name}: not defined in pyproject.toml")
     failing = sum(p.needs_ensure for p in results)
     if failing:
         command = "repoutils labels ensure --strict" if strict else "repoutils labels ensure"
         print(f"{failing} of {len(labels)} label(s) in {repo} need `{command}`.")
+    if unexpected:
+        print(
+            f"{len(unexpected)} label(s) in {repo} aren't defined in pyproject.toml: "
+            "add them there (`repoutils labels dump` prints them) or delete them on GitHub."
+        )
+    if failing or unexpected:
         return 0 if exit_zero else 1
     print(
         f"All {len(labels)} label(s) in {repo} match pyproject.toml"
@@ -254,6 +274,11 @@ def main(argv: list[str]) -> int:
         action="store_true",
         help="exit 0 even if labels need ensure (still exit 1 on an error, unlike `|| true`)",
     )
+    check_parser.add_argument(
+        "--fail-on-unexpected",
+        action="store_true",
+        help="also fail on labels the repository has that pyproject.toml doesn't define (ensure leaves them alone)",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -267,7 +292,14 @@ def main(argv: list[str]) -> int:
         if args.mode == "dump":
             return dump(repo, token)
         if args.mode == "check":
-            return check(repo, token, labels, strict=args.strict, exit_zero=args.exit_zero)
+            return check(
+                repo,
+                token,
+                labels,
+                strict=args.strict,
+                exit_zero=args.exit_zero,
+                fail_on_unexpected=args.fail_on_unexpected,
+            )
         return ensure(repo, token, labels, strict=args.strict)
     except subprocess.CalledProcessError as e:
         print(f"{' '.join(e.cmd)} failed:\n{e.stderr}", file=sys.stderr)

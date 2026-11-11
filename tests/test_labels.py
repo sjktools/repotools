@@ -106,6 +106,39 @@ def test_check_exit_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
     assert "3 of 3 label(s) in o/r need" in capsys.readouterr().out
 
 
+def test_check_ignores_unexpected_labels_by_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert _run(tmp_path, monkeypatch, FakeGitHub(MATCHING), ["check"]) == 0
+    assert "not ours" not in capsys.readouterr().out
+
+
+def test_check_fail_on_unexpected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    gh = FakeGitHub(MATCHING)
+    assert _run(tmp_path, monkeypatch, gh, ["check", "--fail-on-unexpected"]) == 1
+    assert gh.writes() == []
+    assert capsys.readouterr().out == (
+        "not ours: not defined in pyproject.toml\n"
+        "1 label(s) in o/r aren't defined in pyproject.toml: "
+        "add them there (`repoutils labels dump` prints them) or delete them on GitHub.\n"
+    )
+
+
+def test_check_fail_on_unexpected_with_missing_labels(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    gh = FakeGitHub([MATCHING[0], MATCHING[3]])
+    assert _run(tmp_path, monkeypatch, gh, ["check", "--fail-on-unexpected", "--exit-zero"]) == 0
+    assert capsys.readouterr().out == (
+        "good first issue: missing\ndocs: missing\nnot ours: not defined in pyproject.toml\n"
+        "2 of 3 label(s) in o/r need `repoutils labels ensure`.\n"
+        "1 label(s) in o/r aren't defined in pyproject.toml: "
+        "add them there (`repoutils labels dump` prints them) or delete them on GitHub.\n"
+    )
+
+
 def test_ensure_creates_missing_labels(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -159,6 +192,16 @@ def test_check_strict_fails_on_any_difference(
     assert out.startswith("bug: needs updating: name is 'Bug' on GitHub")
     assert out.endswith("1 of 3 label(s) in o/r need `repoutils labels ensure --strict`.\n")
     assert "left alone" not in out
+
+
+def test_check_fail_on_unexpected_ignores_case(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # "Bug" is the label pyproject.toml calls "bug", so it's a difference only --strict counts, not an unexpected label.
+    assert (
+        _run(tmp_path, monkeypatch, FakeGitHub(DIFFERENT[:2] + MATCHING[2:3]), ["check", "--fail-on-unexpected"]) == 0
+    )
+    assert capsys.readouterr().out.endswith("All 3 label(s) in o/r match pyproject.toml (except as noted).\n")
 
 
 def test_ensure_without_strict(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
