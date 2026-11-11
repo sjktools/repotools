@@ -63,6 +63,18 @@ allow-update-branch = true
 delete-branch-on-merge = true
 require-web-commit-signoff = false
 
+# The deployment environments `repoutils environments` checks or creates:
+# publish-pypi.yml's. Only a v* tag (a release) may deploy to pypi, so a run of
+# a PR branch's copy of the workflow (which /testpypi dispatches) can't publish
+# to PyPI through trusted publishing; testpypi stays open for /testpypi.
+[tool.repoutils.environments.pypi]
+deployment-branches = "selected"
+allowed-branches = []
+allowed-tags = ["v*"]
+
+[tool.repoutils.environments.testpypi]
+deployment-branches = "all"
+
 # The issue and PR labels `repoutils labels` checks or creates, as exolot and
 # taxtracker use them (see AGENTS.md); .github/dependabot.yml applies two.
 [[tool.repoutils.labels]]

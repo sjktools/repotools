@@ -45,9 +45,10 @@ Run `repoutils --help` for the list, and `repoutils <command> --help` for a comm
 | `recreate-pr` | Recreates a PR as a draft from the same branch and closes the original. |
 | `labels` | `labels check` fails if the repository lacks a label `pyproject.toml` defines; `labels ensure` creates it; `labels dump` prints the repository's labels to paste in. |
 | `repo-settings` | `repo-settings check` fails if a repository setting differs from `pyproject.toml`; `repo-settings ensure` changes it; `repo-settings dump` prints the repository's settings to paste in. |
+| `environments` | `environments check` fails if the repository lacks a deployment environment `pyproject.toml` defines, or one's settings differ; `environments ensure` creates or changes it; `environments dump` prints the repository's environments to paste in. |
 | `check-attestations` | Fails unless every distribution in `dist/` has a PEP 740 publish attestation. |
 
-The commands that post to a PR, `labels` and `repo-settings` read `$GITHUB_TOKEN`, falling back to `gh auth token`.
+The commands that post to a PR, `labels`, `repo-settings` and `environments` read `$GITHUB_TOKEN`, falling back to `gh auth token`.
 
 ## Configuration
 
@@ -99,6 +100,12 @@ squash-merge = { allow = true, title = "pr-title", message = "pr-body" }
 merge-commit.allow = false
 rebase-merge.allow = false
 delete-branch-on-merge = true
+
+# The deployment environments `repoutils environments` checks or creates; see below.
+[tool.repoutils.environments.pypi]
+allowed-tags = ["v*"]
+
+[tool.repoutils.environments.testpypi]
 ```
 
 ### Labels
@@ -149,6 +156,32 @@ It deliberately can't rename, transfer or archive the repository, change its def
 `repoutils repo-settings dump` prints every setting above as the repository has it, as `[tool.repoutils.repo-settings]` with a sub-table for each merge method, for you to paste into `pyproject.toml` and trim to the settings you want to keep the same; pasted unchanged, `check` passes.
 It doesn't read `pyproject.toml` or change it.
 If GitHub doesn't return a setting, or returns a value the table can't give, `dump` leaves it out and says so on stderr.
+
+### Environments
+
+Each `[tool.repoutils.environments.<name>]` table is a deployment environment, which GitHub Actions jobs name with `environment:`.
+A table may be empty, so the environment need only exist, or give any of these settings; one it leaves out is left as it is on GitHub.
+Environment names match regardless of case, as on GitHub, which can't rename one.
+
+| Setting | Values | On GitHub |
+|---|---|---|
+| `deployment-branches` | `"all"`, `"protected"` or `"selected"` | Which branches and tags can deploy: no restriction, protected branches only, or selected branches and tags. |
+| `allowed-branches`, `allowed-tags` | a list of name patterns, such as `["v*"]` | With `"selected"`, the branches and tags that can deploy; giving either implies `deployment-branches = "selected"`, and the list is the complete one. |
+| `wait-timer` | minutes, from 0 to 43200 | How long a job waits before it deploys. |
+| `reviewers` | up to six users (`"login"`) or teams (`"org/team-slug"`) | Required reviewers, one of whom must approve a deployment. |
+| `prevent-self-review` | `true` or `false` | Stop whoever started a run from approving it. |
+| `can-admins-bypass` | `true` or `false` | Allow administrators to bypass these protection rules. |
+
+Wait timers and required reviewers need a public repository or a paid plan; GitHub refuses them otherwise, which `ensure` reports as an HTTP error.
+
+`repoutils environments ensure` creates each missing environment, changes every setting that differs, adds and deletes allowed branches and tags to match their lists, then fails if GitHub didn't apply a change.
+It never deletes an environment, or changes its secrets, variables or custom deployment protection rules.
+`repoutils environments check` changes nothing, and fails exactly when `ensure` would change something; `--exit-zero` and `--fail-on-unexpected` work as they do for `labels check`.
+
+`ensure` needs a token that can administer the repository (a fine-grained token with Administration write permission), which GitHub Actions' `GITHUB_TOKEN` can't be given.
+
+`repoutils environments dump` prints every environment the repository has with all of its settings (the allowed branches and tags only for `"selected"`), for you to paste into `pyproject.toml` and trim to the settings you want to keep the same; pasted unchanged, `check --fail-on-unexpected` passes.
+It doesn't read `pyproject.toml` or change it.
 
 ## Development
 
