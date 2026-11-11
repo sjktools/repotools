@@ -109,6 +109,7 @@ It never changes or deletes a label `pyproject.toml` doesn't define.
 If a request fails part way, the labels before it are already changed, and running `ensure` again finishes the job.
 
 `repoutils labels check` changes nothing, and fails exactly when `ensure`, with the same `--strict`, would change something; it reports the differences `ensure` would leave alone without failing.
+With `--fail-on-unexpected` it also fails on, and lists, the labels the repository has that `pyproject.toml` doesn't define (matching names regardless of case), so `pyproject.toml` can be the complete list; `ensure` still leaves those labels alone, so delete them on GitHub or add them to `pyproject.toml`.
 With `--exit-zero` it reports the same, but exits 0 unless it couldn't check (for example on a bad token), which `|| true` would hide.
 
 In GitHub Actions, `ensure` needs `issues: write` permission, and `check` needs `issues: read` on a private repository.
