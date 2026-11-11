@@ -160,14 +160,15 @@ def test_secrets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest
 
 def test_this_repos_secrets_match_its_workflows() -> None:
     # pyproject.toml lists exactly the secrets the workflows use, as Actions or Dependabot secrets.
+    # Secret names ignore case, as on GitHub.
     used = {
-        name
+        name.upper()
         for path in (ROOT / ".github" / "workflows").glob("*.yml")
         for name in re.findall(r"secrets\.([A-Za-z_][A-Za-z0-9_]*)", path.read_text())
     } - {"GITHUB_TOKEN"}
     listed = load_secrets(ROOT)
     assert listed["dependabot"] == ["DEPENDABOT_FIX_TOKEN"]
-    assert set(listed["actions"]) | set(listed["dependabot"]) == used
+    assert {name.upper() for name in listed["actions"] + listed["dependabot"]} == used
 
 
 def test_this_repos_settings_load() -> None:
