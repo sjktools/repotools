@@ -83,8 +83,11 @@ def test_nothing_to_do(
     gh = FakeGitHub(MATCHING)
     assert _run(tmp_path, monkeypatch, gh, [mode, *strict]) == 0
     assert gh.writes() == []
-    out = capsys.readouterr().out
-    assert "All 3 label(s) in o/r match pyproject.toml." in out or "Created or updated 0 of 3" in out
+    expected = {
+        "check": "All 3 label(s) in o/r match pyproject.toml.\n",
+        "ensure": "Created or updated 0 of 3 label(s) in o/r.\n",
+    }
+    assert capsys.readouterr().out == expected[mode]
 
 
 def test_check_reports_missing_labels(
@@ -110,7 +113,7 @@ def test_ensure_creates_missing_labels(
     assert _run(tmp_path, monkeypatch, gh, ["ensure"]) == 0
     url = f"{github.API_URL}/repos/o/r/labels"
     assert gh.writes() == [
-        ("POST", url, {"name": "good first issue"}),
+        ("POST", url, {"name": "good first issue", "color": "ededed"}),
         ("POST", url, {"name": "docs", "color": "0075ca", "description": "Documentation"}),
     ]
     out = capsys.readouterr().out

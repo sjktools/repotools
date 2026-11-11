@@ -90,7 +90,7 @@ name = "dependencies"
 
 ### Labels
 
-`repoutils labels ensure` creates each missing label, and fills in a description that's empty on GitHub.
+`repoutils labels ensure` creates each missing label (grey, if `pyproject.toml` gives it no color), and fills in a description that's empty on GitHub with the one `pyproject.toml` gives.
 It leaves a name whose case differs, a different color or a different non-empty description as it is, and reports it, unless you pass `--strict`, which changes them to match.
 It never changes or deletes a label `pyproject.toml` doesn't define.
 

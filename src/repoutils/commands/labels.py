@@ -3,11 +3,12 @@ or create and update them so it does.
 
 Each label is a ``[[tool.repoutils.labels]]`` entry with a ``name`` and,
 optionally, a ``color`` (six hex digits, with or without ``#``) and a
-``description``. A setting a label leaves out is left as it is on GitHub.
+``description``. A setting a label leaves out is left as it is on GitHub
+(a missing label is created grey, or without a description).
 Label names match regardless of case, as on GitHub.
 
 ``ensure`` creates every missing label, and fills in a description that's
-empty on GitHub. A name whose case differs, a different color, or a different
+empty on GitHub with the one pyproject.toml gives. A name whose case differs, a different color, or a different
 non-empty description is only reported, unless ``--strict`` is given, when
 ``ensure`` changes it to match pyproject.toml. Labels that pyproject.toml
 doesn't define are never changed or deleted.
@@ -33,6 +34,8 @@ from repoutils import config, github
 TABLE = "[[tool.repoutils.labels]]"
 # GitHub refuses a longer description.
 MAX_DESCRIPTION = 100
+# The color GitHub gives a label created without one.
+DEFAULT_COLOR = "ededed"
 # Labels per page of the list (GitHub's most).
 PER_PAGE = 100
 _COLOR_RE = re.compile(r"#?([0-9a-fA-F]{6})")
@@ -97,9 +100,9 @@ class Plan:
 def plan(label: Label, existing: dict[str, Any] | None, *, strict: bool) -> Plan:
     """What ensure does to make existing (GitHub's label, None if it's missing) match label."""
     if existing is None:
-        fields = {"name": label.name}
-        if label.color is not None:
-            fields["color"] = label.color
+        # GitHub's API docs have listed color as required, so a label without
+        # one is created in the grey GitHub uses by default.
+        fields = {"name": label.name, "color": label.color or DEFAULT_COLOR}
         if label.description is not None:
             fields["description"] = label.description
         return Plan(label, None, fields, ["missing"])
