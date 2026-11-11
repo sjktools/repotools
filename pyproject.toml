@@ -18,7 +18,7 @@ classifiers = [
 ]
 
 [project.urls]
-Repository = "https://github.com/sjktools/repotools"
+Repository = "https://github.com/sjktools/repoutils"
 
 [project.scripts]
 repoutils = "repoutils.cli:main"
