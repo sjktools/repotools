@@ -116,7 +116,7 @@ In GitHub Actions, `ensure` needs `issues: write` permission, and `check` needs 
 ### Repository settings
 
 `[tool.repoutils.repo-settings]` covers the settings on a repository's General settings page that most projects want to keep the same, mainly its Features and Pull Requests sections.
-Every one is optional, and `repoutils repo-settings` leaves a setting the table leaves out as it is on GitHub.
+Every one is optional, though the command fails if the table sets none, and `repoutils repo-settings` leaves a setting the table leaves out as it is on GitHub.
 
 | Setting | Values | On GitHub |
 |---|---|---|

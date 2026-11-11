@@ -135,7 +135,7 @@ def load_settings(root: Path = Path()) -> dict[Setting, Any]:
         if setting is None:
             raise config.ConfigError(f"{TABLE} has an unknown setting: {key}")
         if setting.choices is not None:
-            if value not in setting.choices:
+            if not isinstance(value, str) or value not in setting.choices:
                 choices = ", ".join(f'"{choice}"' for choice in setting.choices)
                 raise config.ConfigError(f"{TABLE} {key} must be one of {choices}")
         elif type(value) is not setting.kind:

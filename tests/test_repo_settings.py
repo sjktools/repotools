@@ -225,6 +225,7 @@ TABLE = "[tool.repoutils.repo-settings]\n"
         (TABLE + "description = false\n", "description must be a string"),
         (TABLE + "pull-request-creation = 'collaborators_only'\n", 'must be one of "all", "collaborators"'),
         (TABLE + "merge-commit.title = 'PR_TITLE'\n", 'merge-commit.title must be one of "pr-title"'),
+        (TABLE + "pull-request-creation = ['all']\n", "pull-request-creation must be one of"),
     ],
 )
 def test_bad_config(tmp_path: Path, config: str, error: str) -> None:
