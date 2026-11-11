@@ -57,6 +57,7 @@ The repository owner, or an organization member, commenting just `/testpypi` on 
 
 `claude.yml` and `claude-code-review.yml` run Claude Code when a comment starts with `@claude` (with the `CLAUDE_CODE_OAUTH_TOKEN` secret); their `route` jobs run `repoutils claude-route` from a sparse checkout of `src/repoutils/` with the runner's `python3`, installing nothing.
 The repository owner, or an organization member, commenting just `/autofix` on an open PR from this repository runs `just fix` on its branch and pushes the result (with the `AUTOFIX_TOKEN` secret).
+`[tool.repoutils.secrets]` in `pyproject.toml` lists the secrets these workflows use, which `repoutils secrets check` confirms the repository has; update it when a workflow starts or stops using one.
 
 ## Issue labels
 

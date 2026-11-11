@@ -16,6 +16,7 @@ import pytest
 from repoutils import cli
 from repoutils.commands.labels import load_labels
 from repoutils.commands.repo_settings import load_settings
+from repoutils.commands.secrets import load_secrets
 
 ROOT = Path(__file__).parents[1]
 
@@ -107,6 +108,7 @@ def test_check_screenshots_dir(monkeypatch: pytest.MonkeyPatch, capsys: pytest.C
         (["check-attestations", "a", "b"], "[dist]"),
         (["labels"], "{check,ensure,dump}"),
         (["repo-settings"], "{check,ensure,dump}"),
+        (["secrets"], "{check,dump}"),
     ],
 )
 def test_usage_errors(capsys: pytest.CaptureFixture[str], args: list[str], usage: str) -> None:
@@ -146,6 +148,17 @@ def test_repo_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: 
     monkeypatch.chdir(tmp_path)
     assert cli.main(["repo-settings", "check"]) == 1
     assert "No repository settings are defined" in capsys.readouterr().err
+
+
+def test_secrets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    # A project with no secrets listed fails before anything talks to GitHub.
+    monkeypatch.chdir(tmp_path)
+    assert cli.main(["secrets", "check"]) == 1
+    assert "No secrets are listed" in capsys.readouterr().err
+
+
+def test_this_repos_secrets_load() -> None:
+    assert load_secrets(ROOT)["dependabot"] == ["DEPENDABOT_FIX_TOKEN"]
 
 
 def test_this_repos_settings_load() -> None:

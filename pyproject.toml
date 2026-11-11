@@ -63,6 +63,11 @@ allow-update-branch = true
 delete-branch-on-merge = true
 require-web-commit-signoff = false
 
+# The secrets `repoutils secrets` checks the repository has (see AGENTS.md).
+[tool.repoutils.secrets]
+actions = ["AUTOFIX_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "CODECOV_TOKEN", "GH_ACTIONS_TOKEN"]
+dependabot = ["DEPENDABOT_FIX_TOKEN"]
+
 # The issue and PR labels `repoutils labels` checks or creates, as exolot and
 # taxtracker use them (see AGENTS.md); .github/dependabot.yml applies two.
 [[tool.repoutils.labels]]

@@ -45,9 +45,10 @@ Run `repoutils --help` for the list, and `repoutils <command> --help` for a comm
 | `recreate-pr` | Recreates a PR as a draft from the same branch and closes the original. |
 | `labels` | `labels check` fails if the repository lacks a label `pyproject.toml` defines; `labels ensure` creates it; `labels dump` prints the repository's labels to paste in. |
 | `repo-settings` | `repo-settings check` fails if a repository setting differs from `pyproject.toml`; `repo-settings ensure` changes it; `repo-settings dump` prints the repository's settings to paste in. |
+| `secrets` | `secrets check` fails if the repository lacks an Actions or Dependabot secret `pyproject.toml` names; `secrets dump` prints the names of the repository's secrets to paste in. |
 | `check-attestations` | Fails unless every distribution in `dist/` has a PEP 740 publish attestation. |
 
-The commands that post to a PR, `labels` and `repo-settings` read `$GITHUB_TOKEN`, falling back to `gh auth token`.
+The commands that post to a PR, `labels`, `repo-settings` and `secrets` read `$GITHUB_TOKEN`, falling back to `gh auth token`.
 
 ## Configuration
 
@@ -99,6 +100,11 @@ squash-merge = { allow = true, title = "pr-title", message = "pr-body" }
 merge-commit.allow = false
 rebase-merge.allow = false
 delete-branch-on-merge = true
+
+# The names of the secrets `repoutils secrets` checks the repository has; see below.
+[tool.repoutils.secrets]
+actions = ["CODECOV_TOKEN"]
+dependabot = ["DEPENDABOT_FIX_TOKEN"]
 ```
 
 ### Labels
@@ -149,6 +155,24 @@ It deliberately can't rename, transfer or archive the repository, change its def
 `repoutils repo-settings dump` prints every setting above as the repository has it, as `[tool.repoutils.repo-settings]` with a sub-table for each merge method, for you to paste into `pyproject.toml` and trim to the settings you want to keep the same; pasted unchanged, `check` passes.
 It doesn't read `pyproject.toml` or change it.
 If GitHub doesn't return a setting, or returns a value the table can't give, `dump` leaves it out and says so on stderr.
+
+### Secrets
+
+`[tool.repoutils.secrets]` names the secrets a repository's workflows need: `actions` lists its Actions secrets, and `dependabot` its Dependabot secrets (the ones workflows that Dependabot triggers can read).
+A list the table leaves out isn't checked, and names match regardless of case, as on GitHub.
+It covers only repository secrets, not environment or organization ones.
+
+`repoutils secrets` only ever reads secrets' names: GitHub's API never returns a value, so there's no `ensure`.
+Set a missing secret with `gh secret set NAME` (`gh secret set NAME --app dependabot` for a Dependabot secret) or on the repository's settings page.
+
+`repoutils secrets check` fails if the repository lacks a secret the table names.
+With `--fail-on-unexpected` it also fails on, and lists, the secrets of each kind the table lists that it doesn't name, so the table can be the complete list (`dependabot = []` then means there must be no Dependabot secrets).
+`--exit-zero` works as it does for `labels check`.
+
+It needs a token that can list the repository's secrets (a fine-grained token with the Secrets and Dependabot secrets read permissions), which GitHub Actions' `GITHUB_TOKEN` can't be given.
+
+`repoutils secrets dump` prints the name of every secret the repository has as `[tool.repoutils.secrets]`, with both lists, for you to paste into `pyproject.toml`; pasted unchanged, `check --fail-on-unexpected` passes.
+It doesn't read `pyproject.toml` or change it.
 
 ## Development
 
