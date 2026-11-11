@@ -8,9 +8,10 @@ optionally, a ``color`` (six hex digits, with or without ``#``) and a
 Label names match regardless of case, as on GitHub.
 
 ``ensure`` creates every missing label, and fills in a description that's
-empty on GitHub with the one pyproject.toml gives. A name whose case differs, a different color, or a different
-non-empty description is only reported, unless ``--strict`` is given, when
-``ensure`` changes it to match pyproject.toml. Labels that pyproject.toml
+empty on GitHub with the one pyproject.toml gives. A name whose case
+differs, a different color, or a different non-empty description is only
+reported, unless ``--strict`` is given, when ``ensure`` changes it to match
+pyproject.toml. Labels that pyproject.toml
 doesn't define are never changed or deleted.
 
 ``check`` fails exactly when ``ensure`` (with the same ``--strict``) would
@@ -51,7 +52,7 @@ class Label:
 
 
 def load_labels(root: Path = Path()) -> list[Label]:
-    """The labels ``root/pyproject.toml`` defines, raising ValueError if they're malformed."""
+    """The labels ``root/pyproject.toml`` defines, raising config.ConfigError (a ValueError) if they're malformed."""
     entries = config.load(root).get("labels", [])
     if not isinstance(entries, list) or not all(isinstance(entry, dict) for entry in entries):
         raise config.ConfigError(f"{TABLE} must be an array of tables")
@@ -65,9 +66,9 @@ def load_labels(root: Path = Path()) -> list[Label]:
         unknown = sorted(set(entry) - {"name", "color", "description"})
         if unknown:
             raise config.ConfigError(f"{where} has unknown setting(s): {', '.join(unknown)}")
-        if name.casefold() in seen:
+        if name.lower() in seen:
             raise config.ConfigError(f"{where} is defined twice (label names ignore case)")
-        seen[name.casefold()] = name
+        seen[name.lower()] = name
         if color is not None:
             match = _COLOR_RE.fullmatch(color) if isinstance(color, str) else None
             if not match:
@@ -126,8 +127,8 @@ def plan(label: Label, existing: dict[str, Any] | None, *, strict: bool) -> Plan
 
 
 def plans(labels: Iterable[Label], existing: Iterable[dict[str, Any]], *, strict: bool) -> list[Plan]:
-    by_name = {label["name"].casefold(): label for label in existing}
-    return [plan(label, by_name.get(label.name.casefold()), strict=strict) for label in labels]
+    by_name = {label["name"].lower(): label for label in existing}
+    return [plan(label, by_name.get(label.name.lower()), strict=strict) for label in labels]
 
 
 def repo_labels(repo: str, token: str) -> list[dict[str, Any]]:
@@ -169,7 +170,8 @@ def check(repo: str, token: str, labels: list[Label], *, strict: bool, exit_zero
             print(line)
     failing = sum(p.needs_ensure for p in results)
     if failing:
-        print(f"{failing} of {len(labels)} label(s) in {repo} need `repoutils labels ensure`.")
+        command = "repoutils labels ensure --strict" if strict else "repoutils labels ensure"
+        print(f"{failing} of {len(labels)} label(s) in {repo} need `{command}`.")
         return 0 if exit_zero else 1
     print(
         f"All {len(labels)} label(s) in {repo} match pyproject.toml"

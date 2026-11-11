@@ -157,6 +157,7 @@ def test_check_strict_fails_on_any_difference(
     assert _run(tmp_path, monkeypatch, FakeGitHub(DIFFERENT[:2] + MATCHING[2:3]), ["check", "--strict"]) == 1
     out = capsys.readouterr().out
     assert out.startswith("bug: needs updating: name is 'Bug' on GitHub")
+    assert out.endswith("1 of 3 label(s) in o/r need `repoutils labels ensure --strict`.\n")
     assert "left alone" not in out
 
 
