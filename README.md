@@ -44,9 +44,10 @@ Run `repoutils --help` for the list, and `repoutils <command> --help` for a comm
 | `post-screenshots` | Uploads a directory of PNGs and posts them to a PR as a comment. |
 | `recreate-pr` | Recreates a PR as a draft from the same branch and closes the original. |
 | `labels` | `labels check` fails if the repository lacks a label `pyproject.toml` defines; `labels ensure` creates it. |
+| `repo-settings` | `repo-settings check` fails if a repository setting differs from `pyproject.toml`; `repo-settings ensure` changes it. |
 | `check-attestations` | Fails unless every distribution in `dist/` has a PEP 740 publish attestation. |
 
-The commands that post to a PR, and `labels`, read `$GITHUB_TOKEN`, falling back to `gh auth token`.
+The commands that post to a PR, `labels` and `repo-settings` read `$GITHUB_TOKEN`, falling back to `gh auth token`.
 
 ## Configuration
 
@@ -86,6 +87,18 @@ description = "Something isn't working"
 
 [[tool.repoutils.labels]]
 name = "dependencies"
+
+# The repository settings `repoutils repo-settings` checks or changes; see below.
+[tool.repoutils.repo-settings]
+description = "Repository tooling for Python projects"
+homepage = "https://pypi.org/project/repoutils/"
+issues = true
+wiki = false
+pull-request-creation = "collaborators"
+squash-merge = { allow = true, title = "pr-title", message = "pr-body" }
+merge-commit.allow = false
+rebase-merge.allow = false
+delete-branch-on-merge = true
 ```
 
 ### Labels
@@ -99,6 +112,35 @@ If a request fails part way, the labels before it are already changed, and runni
 With `--exit-zero` it reports the same, but exits 0 unless it couldn't check (for example on a bad token), which `|| true` would hide.
 
 In GitHub Actions, `ensure` needs `issues: write` permission, and `check` needs `issues: read` on a private repository.
+
+### Repository settings
+
+`[tool.repoutils.repo-settings]` covers the settings on a repository's General settings page that most projects want to keep the same, mainly its Features and Pull Requests sections.
+Every one is optional, though the command fails if the table sets none, and `repoutils repo-settings` leaves a setting the table leaves out as it is on GitHub.
+
+| Setting | Values | On GitHub |
+|---|---|---|
+| `description`, `homepage` | a string (`""` for none) | The repository's About box. |
+| `issues`, `projects`, `wiki`, `discussions`, `downloads`, `pull-requests` | `true` or `false` | Whether each feature is on. |
+| `pull-request-creation` | `"all"` or `"collaborators"` | Who can open pull requests. |
+| `merge-commit.allow`, `squash-merge.allow`, `rebase-merge.allow` | `true` or `false` | Which merge methods are allowed. |
+| `merge-commit.title` | `"merge-message"` or `"pr-title"` | The default title of a merge commit (`"merge-message"` is "Merge pull request #123 from branch"). |
+| `merge-commit.message` | `"pr-title"`, `"pr-body"` or `"blank"` | The default message of a merge commit. |
+| `squash-merge.title` | `"pr-title"` or `"commit-or-pr-title"` | The default title of a squash commit (`"commit-or-pr-title"` uses the commit's title if there's only one). |
+| `squash-merge.message` | `"pr-body"`, `"commit-messages"` or `"blank"` | The default message of a squash commit. |
+| `allow-auto-merge` | `true` or `false` | Allow auto-merge. |
+| `allow-update-branch` | `true` or `false` | Always suggest updating pull request branches. |
+| `delete-branch-on-merge` | `true` or `false` | Automatically delete head branches. |
+| `require-web-commit-signoff` | `true` or `false` | Require contributors to sign off on web-based commits. |
+
+A commit message is sent with its title, so setting only `squash-merge.message` (or `merge-commit.message`) keeps the title GitHub has; GitHub refuses some title and message pairs, which `ensure` reports as an HTTP 422 error.
+
+It deliberately can't rename, transfer or archive the repository, change its default branch or visibility, or make it a template, and rejects a table that tries.
+
+`repoutils repo-settings ensure` changes every setting that differs, in one request, and fails if GitHub doesn't apply one (it ignores some changes, such as one an organization's policy forbids, rather than refusing them).
+`repoutils repo-settings check` changes nothing, and fails exactly when `ensure` would change something; `--exit-zero` works as it does for `labels check`.
+
+`ensure` needs a token that can administer the repository (a fine-grained token with Administration write permission), which GitHub Actions' `GITHUB_TOKEN` can't be given.
 
 ## Development
 

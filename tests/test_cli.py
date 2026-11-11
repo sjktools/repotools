@@ -15,6 +15,7 @@ import pytest
 
 from repoutils import cli
 from repoutils.commands.labels import load_labels
+from repoutils.commands.repo_settings import load_settings
 
 ROOT = Path(__file__).parents[1]
 
@@ -105,6 +106,7 @@ def test_check_screenshots_dir(monkeypatch: pytest.MonkeyPatch, capsys: pytest.C
         (["requirements-min-versions", "neither"], "{check,fix}"),
         (["check-attestations", "a", "b"], "[dist]"),
         (["labels"], "{check,ensure}"),
+        (["repo-settings"], "{check,ensure}"),
     ],
 )
 def test_usage_errors(capsys: pytest.CaptureFixture[str], args: list[str], usage: str) -> None:
@@ -137,6 +139,17 @@ def test_labels(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.
     monkeypatch.chdir(tmp_path)
     assert cli.main(["labels", "check"]) == 1
     assert "No labels are defined" in capsys.readouterr().err
+
+
+def test_repo_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    # A project with no settings fails before anything talks to GitHub.
+    monkeypatch.chdir(tmp_path)
+    assert cli.main(["repo-settings", "check"]) == 1
+    assert "No repository settings are defined" in capsys.readouterr().err
+
+
+def test_this_repos_settings_load() -> None:
+    assert {setting.key for setting in load_settings(ROOT)} >= {"issues", "squash-merge.allow"}
 
 
 def test_this_repos_labels_load() -> None:
