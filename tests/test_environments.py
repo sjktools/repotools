@@ -482,3 +482,8 @@ def test_dump_no_environments(
 ) -> None:
     assert _run(tmp_path, monkeypatch, FakeGitHub([]), ["dump"], "") == 0
     assert capsys.readouterr() == ("", "o/r has no environments.\n")
+
+
+def test_patterns_differing_only_in_case_are_distinct(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text(TABLE + "allowed-branches = ['main', 'Main']\n")
+    assert environments.load_environments(tmp_path)[0].settings["allowed-branches"] == ["main", "Main"]

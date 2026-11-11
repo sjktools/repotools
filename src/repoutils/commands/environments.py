@@ -70,7 +70,8 @@ class Environment:
 def _string_list(value: Any, where: str, key: str) -> list[str]:
     if not isinstance(value, list) or not all(isinstance(item, str) and item for item in value):
         raise config.ConfigError(f"{where} {key} must be a list of non-empty strings")
-    if len({item.lower() for item in value}) != len(value):
+    # Reviewers' names ignore case; branch and tag names, like Git's, don't.
+    if len({item.lower() if key == "reviewers" else item for item in value}) != len(value):
         raise config.ConfigError(f"{where} {key} lists something twice")
     return list(value)
 

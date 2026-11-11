@@ -48,7 +48,7 @@ Run `repoutils --help` for the list, and `repoutils <command> --help` for a comm
 | `environments` | `environments check` fails if the repository lacks a deployment environment `pyproject.toml` defines, or one's settings differ; `environments ensure` creates or changes it; `environments dump` prints the repository's environments to paste in. |
 | `check-attestations` | Fails unless every distribution in `dist/` has a PEP 740 publish attestation. |
 
-The commands that post to a PR, `labels`, `repo-settings` and `environments` read `$GITHUB_TOKEN`, falling back to `gh auth token`.
+The commands that post to a PR read `$GITHUB_TOKEN`, falling back to `gh auth token`, as do `labels`, `repo-settings` and `environments`.
 
 ## Configuration
 
