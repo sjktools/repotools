@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 
 from repoutils import cli
+from repoutils.commands.labels import load_labels
 
 ROOT = Path(__file__).parents[1]
 
@@ -103,6 +104,7 @@ def test_check_screenshots_dir(monkeypatch: pytest.MonkeyPatch, capsys: pytest.C
         (["dependabot-relock"], "base-ref"),
         (["requirements-min-versions", "neither"], "{check,fix}"),
         (["check-attestations", "a", "b"], "[dist]"),
+        (["labels"], "{check,ensure}"),
     ],
 )
 def test_usage_errors(capsys: pytest.CaptureFixture[str], args: list[str], usage: str) -> None:
@@ -128,6 +130,18 @@ def test_comment_posters(
     monkeypatch.setenv("SCREENSHOTS_TOKEN", "unused")
     assert cli.main([*args, str(tmp_path / "missing")]) == 1
     assert "missing" in capsys.readouterr().err
+
+
+def test_labels(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    # A project with no labels fails before anything talks to GitHub.
+    monkeypatch.chdir(tmp_path)
+    assert cli.main(["labels", "check"]) == 1
+    assert "No labels are defined" in capsys.readouterr().err
+
+
+def test_this_repos_labels_load() -> None:
+    labels = load_labels(ROOT)
+    assert {"dependencies", "type:maintenance"} <= {label.name for label in labels}
 
 
 def test_check_attestations(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

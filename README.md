@@ -43,9 +43,10 @@ Run `repoutils --help` for the list, and `repoutils <command> --help` for a comm
 | `wait-for-base-coverage` | Waits for Codecov to have a PR base commit's coverage, so the PR's comparison works. |
 | `post-screenshots` | Uploads a directory of PNGs and posts them to a PR as a comment. |
 | `recreate-pr` | Recreates a PR as a draft from the same branch and closes the original. |
+| `labels` | `labels check` fails if the repository lacks a label `pyproject.toml` defines; `labels ensure` creates it. |
 | `check-attestations` | Fails unless every distribution in `dist/` has a PEP 740 publish attestation. |
 
-The commands that post to a PR read `$GITHUB_TOKEN`, falling back to `gh auth token`.
+The commands that post to a PR, and `labels`, read `$GITHUB_TOKEN`, falling back to `gh auth token`.
 
 ## Configuration
 
@@ -76,7 +77,27 @@ exclude = ["*/migrations/*"]
 limit = 500
 limits = { "tests/*" = 700 }
 policy = "Split a long file only where that makes the code better."
+
+# The labels `repoutils labels` checks or creates: color and description are optional.
+[[tool.repoutils.labels]]
+name = "bug"
+color = "d73a4a"
+description = "Something isn't working"
+
+[[tool.repoutils.labels]]
+name = "dependencies"
 ```
+
+### Labels
+
+`repoutils labels ensure` creates each missing label, and fills in a description that's empty on GitHub.
+It leaves a name whose case differs, a different color or a different non-empty description as it is, and reports it, unless you pass `--strict`, which changes them to match.
+It never changes or deletes a label `pyproject.toml` doesn't define.
+
+`repoutils labels check` changes nothing, and fails exactly when `ensure`, with the same `--strict`, would change something; it reports the differences `ensure` would leave alone without failing.
+With `--exit-zero` it reports the same, but exits 0 unless it couldn't check (for example on a bad token), which `|| true` would hide.
+
+In GitHub Actions, `ensure` needs `issues: write` permission, and `check` needs `issues: read` on a private repository.
 
 ## Development
 
