@@ -45,6 +45,9 @@ jobs:
         run: just test
 
   build:
+    # Named apart from attestations.yml's build job, as main's ruleset requires
+    # this check by name (see pyproject.toml).
+    name: check-and-build
     needs: test
     runs-on: ubuntu-latest
     permissions:
