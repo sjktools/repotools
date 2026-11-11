@@ -296,7 +296,6 @@ EVERYTHING: dict[str, Any] = {
     "has_projects": False,
     "has_wiki": False,
     "has_discussions": True,
-    "has_downloads": True,
     "has_pull_requests": True,
     "pull_request_creation_policy": "collaborators_only",
     "allow_merge_commit": False,
@@ -326,7 +325,6 @@ def test_dump(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.Ca
         "projects = false\n"
         "wiki = false\n"
         "discussions = true\n"
-        "downloads = true\n"
         "pull-requests = true\n"
         'pull-request-creation = "collaborators"\n'
         "allow-auto-merge = true\n"
