@@ -51,6 +51,9 @@ GROUPS: dict[str, list[Command]] = {
         Command("post-screenshots", "post_screenshots", "Post screenshots to a PR as a comment"),
         Command("recreate-pr", "recreate_pr", "Recreate a PR as a draft and close the original"),
     ],
+    "GitHub repository": [
+        Command("labels", "labels", "Check or create the issue and PR labels pyproject.toml defines"),
+    ],
     "Releases": [
         Command("check-attestations", "check_attestations", "Check every distribution has a PEP 740 attestation"),
     ],

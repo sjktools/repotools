@@ -47,6 +47,88 @@ default-branch = "main"
 include = ["*.py"]
 limit = 500
 
+# The issue and PR labels `repoutils labels` checks or creates, as exolot and
+# taxtracker use them (see AGENTS.md); .github/dependabot.yml applies two.
+[[tool.repoutils.labels]]
+name = "type:bug"
+color = "d73a4a"
+description = "Something behaves wrongly"
+
+[[tool.repoutils.labels]]
+name = "type:feature"
+color = "0e5a8a"
+description = "New capability, such as a new command"
+
+[[tool.repoutils.labels]]
+name = "type:improvement"
+color = "1d76db"
+description = "Makes something that already works better"
+
+[[tool.repoutils.labels]]
+name = "type:maintenance"
+color = "5319e7"
+description = "Refactors, dead code, CI, dependencies; no visible change"
+
+[[tool.repoutils.labels]]
+name = "type:docs"
+color = "0075ca"
+description = "Documentation only"
+
+[[tool.repoutils.labels]]
+name = "priority:p0"
+color = "b60205"
+description = "Drop everything: a release is broken or a check passes or fails wrongly"
+
+[[tool.repoutils.labels]]
+name = "priority:p1"
+color = "e99695"
+description = "Do next"
+
+[[tool.repoutils.labels]]
+name = "priority:p2"
+color = "f9d0c4"
+description = "Worth doing when convenient"
+
+[[tool.repoutils.labels]]
+name = "priority:p3"
+color = "ededed"
+description = "Someday/maybe"
+
+[[tool.repoutils.labels]]
+name = "size:s"
+color = "c2e0c6"
+description = "One small PR"
+
+[[tool.repoutils.labels]]
+name = "size:m"
+color = "7fd18b"
+description = "One PR that needs some design"
+
+[[tool.repoutils.labels]]
+name = "size:l"
+color = "0e8a16"
+description = "Several PRs: should become a parent issue with sub-issues"
+
+[[tool.repoutils.labels]]
+name = "concern:security"
+color = "fbca04"
+description = "Security risk or hardening"
+
+[[tool.repoutils.labels]]
+name = "concern:breaking"
+color = "e4a11b"
+description = "Changes commands, options, config or exit codes that projects rely on"
+
+[[tool.repoutils.labels]]
+name = "question"
+color = "d876e3"
+description = "Further information is requested"
+
+[[tool.repoutils.labels]]
+name = "dependencies"
+color = "0366d6"
+description = "Dependabot's dependency updates"
+
 # Refuse uv versions older than CI's, which may resolve or write uv.lock differently.
 # Keep in step with the setup-uv `version` in .github/workflows.
 [tool.uv]
