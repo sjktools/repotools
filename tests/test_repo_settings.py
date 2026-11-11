@@ -152,9 +152,35 @@ def test_missing_field(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: 
     assert _run(tmp_path, monkeypatch, gh, ["ensure"]) == 1
     assert gh.writes() == []
     assert capsys.readouterr().err == (
-        "GitHub didn't return allow_squash_merge, squash_merge_commit_message: "
+        "GitHub didn't return allow_squash_merge, squash_merge_commit_message, squash_merge_commit_title: "
         "the token may not have access to the repository's settings\n"
     )
+
+
+def test_missing_title_for_a_configured_message() -> None:
+    settings = {BY_KEY["squash-merge.message"]: "blank"}
+    with pytest.raises(RuntimeError, match="didn't return squash_merge_commit_title"):
+        repo_settings.plan(settings, {"squash_merge_commit_message": "PR_BODY"})
+
+
+def test_ensure_patch_response_missing_a_field(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    gh = FakeGitHub(DIFFERENT)
+    real = gh.__call__
+
+    def request(method: str, url: str, token: str, **kwargs: Any) -> Any:
+        response = real(method, url, token, **kwargs)
+        if method == "PATCH":
+            del response["has_wiki"]
+        return response
+
+    (tmp_path / "pyproject.toml").write_text(CONFIG)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(github, "request", request)
+    assert repo_settings.main(["ensure", "--repo", "o/r"]) == 1
+    assert capsys.readouterr().err.startswith("Updated o/r, but couldn't check GitHub applied every change: ")
 
 
 def test_title_alone_is_sent_alone() -> None:

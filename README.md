@@ -133,6 +133,8 @@ Every one is optional, though the command fails if the table sets none, and `rep
 | `delete-branch-on-merge` | `true` or `false` | Automatically delete head branches. |
 | `require-web-commit-signoff` | `true` or `false` | Require contributors to sign off on web-based commits. |
 
+A commit message is sent with its title, so setting only `squash-merge.message` (or `merge-commit.message`) keeps the title GitHub has; GitHub refuses some title and message pairs, which `ensure` reports as an HTTP 422 error.
+
 It deliberately can't rename, transfer or archive the repository, change its default branch or visibility, or make it a template, and rejects a table that tries.
 
 `repoutils repo-settings ensure` changes every setting that differs, in one request, and fails if GitHub doesn't apply one (it ignores some changes, such as one an organization's policy forbids, rather than refusing them).

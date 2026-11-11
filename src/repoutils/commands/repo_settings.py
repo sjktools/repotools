@@ -155,7 +155,10 @@ class Plan:
 
 def plan(settings: dict[Setting, Any], existing: dict[str, Any]) -> Plan:
     """What ensure does to make existing (GitHub's repository) match settings."""
-    missing = [setting.api_field for setting in settings if setting.api_field not in existing]
+    needed = [setting.api_field for setting in settings]
+    # A message's title is sent with it, so it must be there too.
+    needed += [title for title, message in PAIRS if message in needed and title not in needed]
+    missing = [name for name in needed if name not in existing]
     if missing:
         raise RuntimeError(
             f"GitHub didn't return {', '.join(missing)}: the token may not have access to the repository's settings"
@@ -193,9 +196,13 @@ def ensure(repo: str, token: str, settings: dict[Setting, Any]) -> int:
         updated = github.request("PATCH", repo_url(repo), token, json_body=p.fields)
         # GitHub ignores a field it doesn't accept (or a value the owner's
         # policy forbids) instead of refusing the request, so check each.
-        unapplied = plan(settings, updated).changes
         for change in p.changes:
             print(f"updated: {change}")
+        try:
+            unapplied = plan(settings, updated).changes
+        except RuntimeError as e:
+            print(f"Updated {repo}, but couldn't check GitHub applied every change: {e}", file=sys.stderr)
+            return 1
         if unapplied:
             for change in unapplied:
                 print(f"GitHub didn't apply the change: {change}", file=sys.stderr)
