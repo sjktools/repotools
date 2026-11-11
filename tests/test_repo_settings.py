@@ -285,3 +285,106 @@ def test_bad_config_through_main(
     assert _run(tmp_path, monkeypatch, gh, ["ensure"], TABLE + "name = 'x'\n") == 1
     assert gh.calls == []
     assert "can't set name" in capsys.readouterr().err
+
+
+# Every setting, as GitHub returns it.
+EVERYTHING: dict[str, Any] = {
+    "name": "r",
+    "description": 'Tools with "quotes"',
+    "homepage": None,
+    "has_issues": True,
+    "has_projects": False,
+    "has_wiki": False,
+    "has_discussions": True,
+    "has_downloads": True,
+    "has_pull_requests": True,
+    "pull_request_creation_policy": "collaborators_only",
+    "allow_merge_commit": False,
+    "merge_commit_title": "MERGE_MESSAGE",
+    "merge_commit_message": "PR_TITLE",
+    "allow_squash_merge": True,
+    "squash_merge_commit_title": "PR_TITLE",
+    "squash_merge_commit_message": "PR_BODY",
+    "allow_rebase_merge": False,
+    "allow_auto_merge": True,
+    "allow_update_branch": True,
+    "delete_branch_on_merge": True,
+    "web_commit_signoff_required": False,
+}
+
+
+def test_dump(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    # dump doesn't need pyproject.toml to set anything.
+    assert _run(tmp_path, monkeypatch, FakeGitHub(EVERYTHING), ["dump"], "") == 0
+    out, err = capsys.readouterr()
+    assert err == ""
+    assert out == (
+        "[tool.repoutils.repo-settings]\n"
+        'description = "Tools with \\"quotes\\""\n'
+        'homepage = ""\n'
+        "issues = true\n"
+        "projects = false\n"
+        "wiki = false\n"
+        "discussions = true\n"
+        "downloads = true\n"
+        "pull-requests = true\n"
+        'pull-request-creation = "collaborators"\n'
+        "allow-auto-merge = true\n"
+        "allow-update-branch = true\n"
+        "delete-branch-on-merge = true\n"
+        "require-web-commit-signoff = false\n"
+        "\n"
+        "[tool.repoutils.repo-settings.merge-commit]\n"
+        "allow = false\n"
+        'title = "merge-message"\n'
+        'message = "pr-title"\n'
+        "\n"
+        "[tool.repoutils.repo-settings.squash-merge]\n"
+        "allow = true\n"
+        'title = "pr-title"\n'
+        'message = "pr-body"\n'
+        "\n"
+        "[tool.repoutils.repo-settings.rebase-merge]\n"
+        "allow = false\n"
+    )
+    # Pasted into pyproject.toml, it gives every setting as GitHub has it.
+    gh = FakeGitHub(EVERYTHING)
+    assert _run(tmp_path, monkeypatch, gh, ["check"], out) == 0
+    assert capsys.readouterr().out == f"All {len(BY_KEY)} setting(s) in o/r match pyproject.toml.\n"
+    assert gh.writes() == []
+
+
+def test_dump_leaves_out_what_it_cant_give(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # GitHub may leave out a field (some need access to the settings) or return an unexpected value.
+    merge_commit = {"allow_merge_commit", "merge_commit_title", "merge_commit_message"}
+    existing = {k: v for k, v in EVERYTHING.items() if k not in merge_commit} | {
+        "pull_request_creation_policy": "new",
+        "squash_merge_commit_title": ["not", "a", "string"],
+    }
+    # dump neither reads pyproject.toml (this one is malformed) nor changes it.
+    config = "[tool.repoutils]\nrepo-settings = 1\n"
+    assert _run(tmp_path, monkeypatch, FakeGitHub(existing), ["dump"], config) == 0
+    assert (tmp_path / "pyproject.toml").read_text() == config
+    out, err = capsys.readouterr()
+    assert "merge-commit" not in out and "pull-request-creation" not in out and "title" not in out
+    assert "[tool.repoutils.repo-settings.squash-merge]\nallow = true\n\n" in out
+    assert err == (
+        "Left out pull-request-creation: GitHub's value 'new' isn't one [tool.repoutils.repo-settings] can give\n"
+        "Left out merge-commit.allow: GitHub didn't return allow_merge_commit\n"
+        "Left out merge-commit.title: GitHub didn't return merge_commit_title\n"
+        "Left out merge-commit.message: GitHub didn't return merge_commit_message\n"
+        "Left out squash-merge.title: GitHub's value ['not', 'a', 'string'] isn't one "
+        "[tool.repoutils.repo-settings] can give\n"
+        "Left out squash-merge.message: it can't be checked without its title\n"
+    )
+    assert _run(tmp_path, monkeypatch, FakeGitHub(existing), ["check"], out) == 0
+
+
+def test_dump_doesnt_depend_on_the_order_of_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A message listed before its title is still given with it.
+    monkeypatch.setattr(repo_settings, "SETTINGS", list(reversed(repo_settings.SETTINGS)))
+    text, skipped = repo_settings.dump_toml(EVERYTHING)
+    assert skipped == []
+    assert 'message = "pr-body"\n' in text and 'message = "pr-title"\n' in text

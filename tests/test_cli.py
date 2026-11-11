@@ -105,8 +105,8 @@ def test_check_screenshots_dir(monkeypatch: pytest.MonkeyPatch, capsys: pytest.C
         (["dependabot-relock"], "base-ref"),
         (["requirements-min-versions", "neither"], "{check,fix}"),
         (["check-attestations", "a", "b"], "[dist]"),
-        (["labels"], "{check,ensure}"),
-        (["repo-settings"], "{check,ensure}"),
+        (["labels"], "{check,ensure,dump}"),
+        (["repo-settings"], "{check,ensure,dump}"),
     ],
 )
 def test_usage_errors(capsys: pytest.CaptureFixture[str], args: list[str], usage: str) -> None:

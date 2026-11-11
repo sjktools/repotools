@@ -43,8 +43,8 @@ Run `repoutils --help` for the list, and `repoutils <command> --help` for a comm
 | `wait-for-base-coverage` | Waits for Codecov to have a PR base commit's coverage, so the PR's comparison works. |
 | `post-screenshots` | Uploads a directory of PNGs and posts them to a PR as a comment. |
 | `recreate-pr` | Recreates a PR as a draft from the same branch and closes the original. |
-| `labels` | `labels check` fails if the repository lacks a label `pyproject.toml` defines; `labels ensure` creates it. |
-| `repo-settings` | `repo-settings check` fails if a repository setting differs from `pyproject.toml`; `repo-settings ensure` changes it. |
+| `labels` | `labels check` fails if the repository lacks a label `pyproject.toml` defines; `labels ensure` creates it; `labels dump` prints the repository's labels to paste in. |
+| `repo-settings` | `repo-settings check` fails if a repository setting differs from `pyproject.toml`; `repo-settings ensure` changes it; `repo-settings dump` prints the repository's settings to paste in. |
 | `check-attestations` | Fails unless every distribution in `dist/` has a PEP 740 publish attestation. |
 
 The commands that post to a PR, `labels` and `repo-settings` read `$GITHUB_TOKEN`, falling back to `gh auth token`.
@@ -113,6 +113,9 @@ With `--exit-zero` it reports the same, but exits 0 unless it couldn't check (fo
 
 In GitHub Actions, `ensure` needs `issues: write` permission, and `check` needs `issues: read` on a private repository.
 
+`repoutils labels dump` prints every label the repository has as `[[tool.repoutils.labels]]` entries, with its name, color and any description, for you to paste into `pyproject.toml` and edit; pasted unchanged, `check --strict` passes.
+It doesn't read `pyproject.toml` or change it.
+
 ### Repository settings
 
 `[tool.repoutils.repo-settings]` covers the settings on a repository's General settings page that most projects want to keep the same, mainly its Features and Pull Requests sections.
@@ -141,6 +144,10 @@ It deliberately can't rename, transfer or archive the repository, change its def
 `repoutils repo-settings check` changes nothing, and fails exactly when `ensure` would change something; `--exit-zero` works as it does for `labels check`.
 
 `ensure` needs a token that can administer the repository (a fine-grained token with Administration write permission), which GitHub Actions' `GITHUB_TOKEN` can't be given.
+
+`repoutils repo-settings dump` prints every setting above as the repository has it, as `[tool.repoutils.repo-settings]` with a sub-table for each merge method, for you to paste into `pyproject.toml` and trim to the settings you want to keep the same; pasted unchanged, `check` passes.
+It doesn't read `pyproject.toml` or change it.
+If GitHub doesn't return a setting, or returns a value the table can't give, `dump` leaves it out and says so on stderr.
 
 ## Development
 

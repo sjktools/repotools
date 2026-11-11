@@ -4,6 +4,7 @@ Every setting has a default, so a project with no table (or no
 ``pyproject.toml``) still works; command-line options override both.
 """
 
+import json
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -68,3 +69,16 @@ def default_branch(root: Path = Path()) -> str:
     if not isinstance(value, str) or not value:
         raise ConfigError("[tool.repoutils] default-branch must be a non-empty string")
     return value
+
+
+def toml_string(value: str) -> str:
+    """value as a TOML basic string, quoted and escaped, for output to paste into pyproject.toml."""
+    # JSON's escapes are all valid TOML, but JSON leaves DEL unescaped, which TOML forbids.
+    return json.dumps(value, ensure_ascii=False).replace("\x7f", "\\u007f")
+
+
+def toml_value(value: bool | str) -> str:
+    """value as TOML."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return toml_string(value)

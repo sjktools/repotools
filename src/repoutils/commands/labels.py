@@ -16,7 +16,11 @@ doesn't define are never changed or deleted.
 
 ``check`` fails exactly when ``ensure`` (with the same ``--strict``) would
 change something, and reports the differences ``ensure`` would leave alone
-without failing. Stdlib-only, like every repoutils command."""
+without failing.
+
+``dump`` prints every label the repository has as ``[[tool.repoutils.labels]]``
+entries, to paste into pyproject.toml (``check --strict`` then passes) and
+edit. Stdlib-only, like every repoutils command."""
 
 import argparse
 import os
@@ -163,6 +167,29 @@ def _report(p: Plan, *, done: bool) -> list[str]:
     return lines
 
 
+def dump_toml(existing: Iterable[dict[str, Any]]) -> str:
+    """GitHub's labels as ``[[tool.repoutils.labels]]`` entries, leaving out an empty description."""
+    entries = []
+    for label in existing:
+        lines = [
+            TABLE,
+            f"name = {config.toml_string(label['name'])}",
+            f"color = {config.toml_string(label['color'].lower())}",
+        ]
+        if label.get("description"):
+            lines.append(f"description = {config.toml_string(label['description'])}")
+        entries.append("".join(f"{line}\n" for line in lines))
+    return "\n".join(entries)
+
+
+def dump(repo: str, token: str) -> int:
+    existing = repo_labels(repo, token)
+    if not existing:
+        print(f"{repo} has no labels.", file=sys.stderr)
+    print(dump_toml(existing), end="")
+    return 0
+
+
 def check(repo: str, token: str, labels: list[Label], *, strict: bool, exit_zero: bool) -> int:
     results = plans(labels, repo_labels(repo, token), strict=strict)
     for p in results:
@@ -197,12 +224,17 @@ def main(argv: list[str]) -> int:
         description=__doc__.split("\n\n")[0].replace("\n", " "),
         epilog="Reads labels with $GITHUB_TOKEN, defaulting to `gh auth token`; ensure needs issues: write.",
     )
-    subparsers = parser.add_subparsers(dest="mode", required=True, metavar="{check,ensure}")
+    subparsers = parser.add_subparsers(dest="mode", required=True, metavar="{check,ensure,dump}")
     check_parser = subparsers.add_parser(
         "check", help="fail if ensure would change anything", description="Fail if ensure would change anything."
     )
     ensure_parser = subparsers.add_parser(
         "ensure", help="create and update labels to match", description="Create and update labels to match."
+    )
+    dump_parser = subparsers.add_parser(
+        "dump",
+        help="print the repository's labels as pyproject.toml entries",
+        description=f"Print every label the repository has as {TABLE} entries, to paste into pyproject.toml.",
     )
     for sub in (check_parser, ensure_parser):
         sub.add_argument(
@@ -211,6 +243,7 @@ def main(argv: list[str]) -> int:
             help="also count (check) or change (ensure) a name's case, a color or a non-empty description "
             "that differs from pyproject.toml",
         )
+    for sub in (check_parser, ensure_parser, dump_parser):
         sub.add_argument(
             "--repo",
             default=os.environ.get("GITHUB_REPOSITORY"),
@@ -224,12 +257,15 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
 
     try:
-        labels = load_labels()
-        if not labels:
+        # dump doesn't read pyproject.toml, so it works before there are any labels there.
+        labels = [] if args.mode == "dump" else load_labels()
+        if not labels and args.mode != "dump":
             print(f"No labels are defined: add {TABLE} entries to pyproject.toml.", file=sys.stderr)
             return 1
         token = os.environ.get("GITHUB_TOKEN") or github.gh_output("auth", "token")
         repo = args.repo or github.gh_output("repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner")
+        if args.mode == "dump":
+            return dump(repo, token)
         if args.mode == "check":
             return check(repo, token, labels, strict=args.strict, exit_zero=args.exit_zero)
         return ensure(repo, token, labels, strict=args.strict)
