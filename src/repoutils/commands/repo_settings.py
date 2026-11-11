@@ -190,15 +190,28 @@ def dump_toml(existing: dict[str, Any]) -> tuple[str, list[str]]:
     top: list[str] = []
     tables: dict[str, list[str]] = {}
     skipped: list[str] = []
+    dumped: set[str] = set()
+    titles = {message: title for title, message in PAIRS}
     for setting in SETTINGS:
         if setting.api_field not in existing:
             skipped.append(f"{setting.key}: GitHub didn't return {setting.api_field}")
             continue
-        value = setting.to_config(existing[setting.api_field])
-        valid = isinstance(value, bool | str) and type(value) is setting.kind
-        if not valid or (setting.choices is not None and value not in setting.choices):
-            skipped.append(f"{setting.key}: GitHub's value {existing[setting.api_field]!r} isn't one {TABLE} can give")
+        raw = existing[setting.api_field]
+        # An enum's value is looked up, so must be hashable before to_config.
+        value = setting.to_config(raw) if setting.choices is None or isinstance(raw, str) else None
+        if (
+            not isinstance(value, bool | str)
+            or type(value) is not setting.kind
+            or (setting.choices is not None and value not in setting.choices)
+        ):
+            skipped.append(f"{setting.key}: GitHub's value {raw!r} isn't one {TABLE} can give")
             continue
+        title = titles.get(setting.api_field)
+        if title is not None and title not in dumped:
+            # check sends a message with its title, so needs GitHub's title too.
+            skipped.append(f"{setting.key}: it can't be checked without its title")
+            continue
+        dumped.add(setting.api_field)
         table, _, key = setting.key.rpartition(".")
         (tables.setdefault(table, []) if table else top).append(f"{key} = {config.toml_value(value)}\n")
     sections = [f"{TABLE}\n" + "".join(top)]

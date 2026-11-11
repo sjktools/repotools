@@ -303,5 +303,8 @@ def test_dump_reads_every_page(
 
 
 def test_dump_no_labels(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
-    assert _run(tmp_path, monkeypatch, FakeGitHub([]), ["dump"], "") == 0
+    # dump neither reads pyproject.toml (this one is malformed) nor changes it.
+    config = "[tool.repoutils]\nlabels = 1\n"
+    assert _run(tmp_path, monkeypatch, FakeGitHub([]), ["dump"], config) == 0
+    assert (tmp_path / "pyproject.toml").read_text() == config
     assert capsys.readouterr() == ("", "o/r has no labels.\n")

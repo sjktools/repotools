@@ -357,13 +357,26 @@ def test_dump(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.Ca
 def test_dump_leaves_out_what_it_cant_give(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # GitHub may leave out a field (some need access to the settings) or add an enum value.
-    existing = {k: v for k, v in EVERYTHING.items() if "merge" not in k} | {"pull_request_creation_policy": "new"}
-    assert _run(tmp_path, monkeypatch, FakeGitHub(existing), ["dump"], "") == 0
+    # GitHub may leave out a field (some need access to the settings) or return an unexpected value.
+    merge_commit = {"allow_merge_commit", "merge_commit_title", "merge_commit_message"}
+    existing = {k: v for k, v in EVERYTHING.items() if k not in merge_commit} | {
+        "pull_request_creation_policy": "new",
+        "squash_merge_commit_title": ["not", "a", "string"],
+    }
+    # dump neither reads pyproject.toml (this one is malformed) nor changes it.
+    config = "[tool.repoutils]\nrepo-settings = 1\n"
+    assert _run(tmp_path, monkeypatch, FakeGitHub(existing), ["dump"], config) == 0
+    assert (tmp_path / "pyproject.toml").read_text() == config
     out, err = capsys.readouterr()
-    assert "merge" not in out and "pull-request-creation" not in out
-    assert err.startswith(
+    assert "merge-commit" not in out and "pull-request-creation" not in out and "title" not in out
+    assert "[tool.repoutils.repo-settings.squash-merge]\nallow = true\n\n" in out
+    assert err == (
         "Left out pull-request-creation: GitHub's value 'new' isn't one [tool.repoutils.repo-settings] can give\n"
         "Left out merge-commit.allow: GitHub didn't return allow_merge_commit\n"
+        "Left out merge-commit.title: GitHub didn't return merge_commit_title\n"
+        "Left out merge-commit.message: GitHub didn't return merge_commit_message\n"
+        "Left out squash-merge.title: GitHub's value ['not', 'a', 'string'] isn't one "
+        "[tool.repoutils.repo-settings] can give\n"
+        "Left out squash-merge.message: it can't be checked without its title\n"
     )
     assert _run(tmp_path, monkeypatch, FakeGitHub(existing), ["check"], out) == 0
