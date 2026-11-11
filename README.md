@@ -124,7 +124,7 @@ Every one is optional, though the command fails if the table sets none, and `rep
 | Setting | Values | On GitHub |
 |---|---|---|
 | `description`, `homepage` | a string (`""` for none) | The repository's About box. |
-| `issues`, `projects`, `wiki`, `discussions`, `downloads`, `pull-requests` | `true` or `false` | Whether each feature is on. |
+| `issues`, `projects`, `wiki`, `discussions`, `pull-requests` | `true` or `false` | Whether each feature is on. |
 | `pull-request-creation` | `"all"` or `"collaborators"` | Who can open pull requests. |
 | `merge-commit.allow`, `squash-merge.allow`, `rebase-merge.allow` | `true` or `false` | Which merge methods are allowed. |
 | `merge-commit.title` | `"merge-message"` or `"pr-title"` | The default title of a merge commit (`"merge-message"` is "Merge pull request #123 from branch"). |

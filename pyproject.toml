@@ -53,7 +53,6 @@ issues = true
 projects = false
 wiki = false
 discussions = false
-downloads = false
 pull-requests = true
 pull-request-creation = "collaborators"
 merge-commit = { allow = false }

@@ -67,7 +67,6 @@ SETTINGS = [
     Setting("projects", "has_projects", bool),
     Setting("wiki", "has_wiki", bool),
     Setting("discussions", "has_discussions", bool),
-    Setting("downloads", "has_downloads", bool),
     Setting("pull-requests", "has_pull_requests", bool),
     Setting(
         "pull-request-creation",
