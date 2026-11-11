@@ -63,6 +63,28 @@ allow-update-branch = true
 delete-branch-on-merge = true
 require-web-commit-signoff = false
 
+# The branch rulesets `repoutils rulesets` checks or creates, each giving only
+# what differs from a new ruleset's defaults. main changes only by a squash-merged
+# PR whose CI passed (build runs only once every test job has passed). Admins
+# may bypass that for a PR, but nobody can push to main directly or delete it.
+[tool.repoutils.rulesets.main]
+include = ["~DEFAULT_BRANCH"]
+bypass = [{ role = "admin", mode = "pull-request" }]
+
+[tool.repoutils.rulesets.main.rules]
+deletion = true
+non-fast-forward = true
+
+[tool.repoutils.rulesets.main.rules.pull-request]
+allowed-merge-methods = ["squash"]
+
+[tool.repoutils.rulesets.main.rules.required-status-checks]
+required-status-checks = [
+    { context = "build", app = "github-actions" },
+    { context = "coverage", app = "github-actions" },
+    { context = "actions-lock", app = "github-actions" },
+]
+
 # The issue and PR labels `repoutils labels` checks or creates, as exolot and
 # taxtracker use them (see AGENTS.md); .github/dependabot.yml applies two.
 [[tool.repoutils.labels]]

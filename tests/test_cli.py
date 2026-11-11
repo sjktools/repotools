@@ -16,6 +16,7 @@ import pytest
 from repoutils import cli
 from repoutils.commands.labels import load_labels
 from repoutils.commands.repo_settings import load_settings
+from repoutils.ruleset_format import load_rulesets
 
 ROOT = Path(__file__).parents[1]
 
@@ -107,6 +108,7 @@ def test_check_screenshots_dir(monkeypatch: pytest.MonkeyPatch, capsys: pytest.C
         (["check-attestations", "a", "b"], "[dist]"),
         (["labels"], "{check,ensure,dump}"),
         (["repo-settings"], "{check,ensure,dump}"),
+        (["rulesets"], "{check,ensure,dump}"),
     ],
 )
 def test_usage_errors(capsys: pytest.CaptureFixture[str], args: list[str], usage: str) -> None:
@@ -146,6 +148,18 @@ def test_repo_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: 
     monkeypatch.chdir(tmp_path)
     assert cli.main(["repo-settings", "check"]) == 1
     assert "No repository settings are defined" in capsys.readouterr().err
+
+
+def test_rulesets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    # A project with no rulesets fails before anything talks to GitHub.
+    monkeypatch.chdir(tmp_path)
+    assert cli.main(["rulesets", "check"]) == 1
+    assert "No rulesets are defined" in capsys.readouterr().err
+
+
+def test_this_repos_rulesets_load() -> None:
+    main = load_rulesets(ROOT)["main"]
+    assert {"deletion", "non-fast-forward", "pull-request", "required-status-checks"} <= set(main["rules"])
 
 
 def test_this_repos_settings_load() -> None:

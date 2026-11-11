@@ -21,6 +21,7 @@ It supports Python 3.12 and later, so don't use newer syntax or `typing` feature
 - `src/repoutils/commands/<name>.py` is one module per command (`check-pins` is `check_pins.py`), which parses its own arguments with `argparse` (with `prog="repoutils <command>"`) in `run()`.
   Most also have a `main()` with plain parameters that the tests call directly.
 - `src/repoutils/config.py` reads the project's `[tool.repoutils]` table from `pyproject.toml` in the current directory; every setting has a default, and command-line options override it.
+- `src/repoutils/ruleset_format.py` is `rulesets`' pyproject.toml format and its conversion to and from GitHub's ruleset JSON, kept apart from the command for length.
 - `src/repoutils/github.py` holds the GitHub API helpers the posting commands share: a request that never follows a redirect with the token to another host, paginated comment listing, `upsert_comment` and `hide_comments`.
 - `tests/test_<module>.py` tests each module, and `tests/test_cli.py` runs every command through `cli.main()`.
 
