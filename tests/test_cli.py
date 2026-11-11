@@ -5,6 +5,7 @@ exit code) fails a test."""
 
 import io
 import json
+import re
 import subprocess
 import sys
 import urllib.request
@@ -157,8 +158,16 @@ def test_secrets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest
     assert "No secrets are listed" in capsys.readouterr().err
 
 
-def test_this_repos_secrets_load() -> None:
-    assert load_secrets(ROOT)["dependabot"] == ["DEPENDABOT_FIX_TOKEN"]
+def test_this_repos_secrets_match_its_workflows() -> None:
+    # pyproject.toml lists exactly the secrets the workflows use, as Actions or Dependabot secrets.
+    used = {
+        name
+        for path in (ROOT / ".github" / "workflows").glob("*.yml")
+        for name in re.findall(r"secrets\.([A-Za-z_][A-Za-z0-9_]*)", path.read_text())
+    } - {"GITHUB_TOKEN"}
+    listed = load_secrets(ROOT)
+    assert listed["dependabot"] == ["DEPENDABOT_FIX_TOKEN"]
+    assert set(listed["actions"]) | set(listed["dependabot"]) == used
 
 
 def test_this_repos_settings_load() -> None:
