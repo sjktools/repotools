@@ -18,6 +18,7 @@ from repoutils import cli
 from repoutils.commands.labels import load_labels
 from repoutils.commands.repo_settings import load_settings
 from repoutils.commands.secrets import load_secrets
+from repoutils.ruleset_format import load_rulesets
 
 ROOT = Path(__file__).parents[1]
 
@@ -70,6 +71,7 @@ def test_python_dash_m(tmp_path: Path) -> None:
     [
         (["check-checkout-credentials"], "set persist-credentials"),
         (["check-pins"], "pin uv"),
+        (["check-prose", "--exit-zero"], "sentences"),
         (["check-sentence-per-line"], "one-sentence-per-line"),
         (["check-whitespace"], "clean whitespace"),
         (["long-files", "--base", ""], "500 lines"),
@@ -110,6 +112,7 @@ def test_check_screenshots_dir(monkeypatch: pytest.MonkeyPatch, capsys: pytest.C
         (["labels"], "{check,ensure,dump}"),
         (["repo-settings"], "{check,ensure,dump}"),
         (["secrets"], "{check,dump}"),
+        (["rulesets"], "{check,ensure,dump}"),
     ],
 )
 def test_usage_errors(capsys: pytest.CaptureFixture[str], args: list[str], usage: str) -> None:
@@ -169,6 +172,18 @@ def test_this_repos_secrets_match_its_workflows() -> None:
     listed = load_secrets(ROOT)
     assert listed["dependabot"] == ["DEPENDABOT_FIX_TOKEN"]
     assert {name.upper() for name in listed["actions"] + listed["dependabot"]} == used
+
+
+def test_rulesets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    # A project with no rulesets fails before anything talks to GitHub.
+    monkeypatch.chdir(tmp_path)
+    assert cli.main(["rulesets", "check"]) == 1
+    assert "No rulesets are defined" in capsys.readouterr().err
+
+
+def test_this_repos_rulesets_load() -> None:
+    main = load_rulesets(ROOT)["main"]
+    assert {"deletion", "non-fast-forward", "pull-request", "required-status-checks"} <= set(main["rules"])
 
 
 def test_this_repos_settings_load() -> None:

@@ -32,6 +32,16 @@ def test_reads_settings(tmp_path: Path) -> None:
     assert config.string_list(table, "missing", ["d"], "where") == ["d"]
 
 
+def test_numbers(tmp_path: Path) -> None:
+    _write(tmp_path, "[tool.repoutils.x]\nlimit = 2.5\noff = false\n")
+    table = config.section("x", tmp_path)
+    assert config.number(table, "limit", 1, "[x]") == 2.5
+    assert config.number(table, "missing", 1, "[x]") == 1
+    assert config.integer(table, "missing", 3, "[x]") == 3
+    assert config.optional_number(table, "limit", 1, "[x]") == 2.5
+    assert config.optional_number(table, "off", 1, "[x]") is None
+
+
 @pytest.mark.parametrize(
     ("text", "call", "message"),
     [
@@ -41,6 +51,31 @@ def test_reads_settings(tmp_path: Path) -> None:
         ("[tool.repoutils]\ncomment-prefix = ''\n", lambda root: config.comment_prefix(root), "comment-prefix"),
         ("[tool.repoutils]\ncomment-prefix = 'a-->'\n", lambda root: config.comment_prefix(root), "comment-prefix"),
         ("[tool.repoutils]\ndefault-branch = 1\n", lambda root: config.default_branch(root), "default-branch"),
+        (
+            "[tool.repoutils.x]\nlimit = true\n",
+            lambda root: config.number(config.section("x", root), "limit", 1, "[x]"),
+            r"\[x\] limit must be a number, 0 or more$",
+        ),
+        (
+            "[tool.repoutils.x]\nlimit = inf\n",
+            lambda root: config.number(config.section("x", root), "limit", 1, "[x]"),
+            r"\[x\] limit must be a number, 0 or more$",
+        ),
+        (
+            "[tool.repoutils.x]\nlimit = nan\n",
+            lambda root: config.optional_number(config.section("x", root), "limit", 1, "[x]"),
+            "limit must be a number, 0 or more, or false",
+        ),
+        (
+            "[tool.repoutils.x]\nlimit = 2.5\n",
+            lambda root: config.integer(config.section("x", root), "limit", 1, "[x]"),
+            r"\[x\] limit must be a whole number, 0 or more$",
+        ),
+        (
+            "[tool.repoutils.x]\nlimit = -1\n",
+            lambda root: config.optional_number(config.section("x", root), "limit", 1, "[x]"),
+            "limit must be a number, 0 or more, or false",
+        ),
         (
             "[tool.repoutils.x]\nfiles = [1]\n",
             lambda root: config.string_list(config.section("x", root), "files", [], "[x]"),
