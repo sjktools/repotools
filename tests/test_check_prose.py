@@ -183,6 +183,25 @@ def test_run(project: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert "missing.md is not a file" in capsys.readouterr().err
 
 
+def test_reports_a_file_it_cannot_read_and_checks_the_rest(project: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    (project / "AGENTS.md").write_bytes(b"Caf\xe9.\n")
+    (project / "README.md").write_text(PLAIN)
+    assert check_prose.main() == 1
+    assert capsys.readouterr().out.splitlines() == [
+        "AGENTS.md: cannot read (not valid UTF-8)",
+        "README.md: 20 sentences, within the limits.",
+        "Prose check failed: AGENTS.md.",
+    ]
+
+
+def test_exit_zero_does_not_cover_a_file_it_cannot_read(project: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    (project / "bad.md").write_text("It runs; it stops.\n" * 20)
+    assert check_prose.main(["bad.md", "gone.md"], exit_zero=True) == 1
+    out = capsys.readouterr().out
+    assert "gone.md: cannot read (No such file or directory)\n" in out
+    assert out.endswith("Prose check failed: bad.md, gone.md.\n")
+
+
 def test_rejects_bad_settings(project: Path) -> None:
     _configure(project, 'max-commas-per-sentence = "few"\n')
     with pytest.raises(config.ConfigError, match=r"\[tool.repoutils.prose\] max-commas-per-sentence must be a number"):

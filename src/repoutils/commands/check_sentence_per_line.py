@@ -3,6 +3,9 @@
 The files are ``[tool.repoutils.sentence-per-line]``'s ``files`` (default
 ``AGENTS.md`` and ``README.md``); a missing one is skipped.
 
+A file that can't be read (one that isn't valid UTF-8, for example) is
+reported, and fails the check.
+
 Outside code fences, tables, headings and HTML lines, this flags sentence
 boundaries that appear in the middle of one line.
 """
@@ -12,7 +15,7 @@ import re
 from pathlib import Path
 
 from repoutils import config
-from repoutils.markdown import INLINE_CODE_RE, unfenced_lines
+from repoutils.markdown import INLINE_CODE_RE, UnreadableError, read_text, unfenced_lines
 
 DEFAULT_FILES = ["AGENTS.md", "README.md"]
 ABBREVIATIONS = ("e.g.", "i.e.", "etc.")
@@ -67,7 +70,12 @@ def main() -> int:
     paths = [path for path in files() if Path(path).is_file()]
     failures = []
     for path in paths:
-        for number, line in _problems(Path(path).read_text(encoding="utf-8")):
+        try:
+            text = read_text(path)
+        except UnreadableError as error:
+            failures.append(str(error))
+            continue
+        for number, line in _problems(text):
             failures.append(f"{path}:{number}: sentence boundary mid-line: {line}")
     if failures:
         print("One-sentence-per-line check failed:")

@@ -1,6 +1,9 @@
 import textwrap
+from pathlib import Path
 
-from repoutils.markdown import Sentence, prose_sentences, unfenced_lines, words
+import pytest
+
+from repoutils.markdown import Sentence, UnreadableError, prose_sentences, read_text, unfenced_lines, words
 
 
 def _sentences(text: str) -> list[tuple[int, str]]:
@@ -328,3 +331,27 @@ def test_a_line_of_markup_alone_is_nothing() -> None:
     assert prose_sentences("![logo](logo.png)\n\n") == []
     assert prose_sentences("") == []
     assert prose_sentences("One two three.") == [Sentence(1, "One two three.")]
+
+
+def test_read_text_reads_utf8(tmp_path: Path) -> None:
+    path = tmp_path / "README.md"
+    path.write_text("Café.\n", encoding="utf-8")
+    assert read_text(str(path)) == "Café.\n"
+
+
+def test_read_text_reports_a_file_that_is_not_utf8(tmp_path: Path) -> None:
+    path = tmp_path / "README.md"
+    path.write_bytes(b"Caf\xe9.\n")
+    with pytest.raises(UnreadableError) as error:
+        read_text(str(path))
+    assert str(error.value) == f"{path}: cannot read (not valid UTF-8)"
+
+
+def test_read_text_reports_a_file_that_cannot_be_opened(tmp_path: Path) -> None:
+    path = tmp_path / "missing.md"
+    with pytest.raises(UnreadableError) as error:
+        read_text(str(path))
+    assert str(error.value) == f"{path}: cannot read (No such file or directory)"
+    # A directory can't be read as a file either.
+    with pytest.raises(UnreadableError, match=r"cannot read \(Is a directory\)$"):
+        read_text(str(tmp_path))
