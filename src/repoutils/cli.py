@@ -59,6 +59,7 @@ GROUPS: dict[str, list[Command]] = {
     "GitHub repository": [
         Command("labels", "labels", "Check or create the issue and PR labels pyproject.toml defines"),
         Command("repo-settings", "repo_settings", "Check or change the repository settings pyproject.toml gives"),
+        Command("environments", "environments", "Check or create the deployment environments pyproject.toml defines"),
         Command("secrets", "secrets", "Check the repository has the secrets pyproject.toml names"),
         Command("rulesets", "rulesets", "Check, create or update the branch rulesets pyproject.toml defines"),
     ],

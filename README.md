@@ -50,10 +50,11 @@ That installs only repoutils, hash-checked against `uv.lock`, and not the projec
 | `labels` | Checks or creates the labels `pyproject.toml` defines, or prints the ones the repository has. |
 | `repo-settings` | Checks or changes the repository settings `pyproject.toml` gives, or prints the ones the repository has. |
 | `rulesets` | Checks, creates or updates the branch rulesets `pyproject.toml` defines, or prints the ones the repository has. |
+| `environments` | Checks, creates or updates the deployment environments `pyproject.toml` defines, or prints the ones the repository has. |
 | `secrets` | Checks the repository has the Actions and Dependabot secrets `pyproject.toml` names, or prints the names it has. |
 | `check-attestations` | Fails unless every distribution in `dist/` has a PEP 740 publish attestation. |
 
-The commands that post to a PR need a GitHub token, and so do `labels`, `repo-settings`, `rulesets` and `secrets`.
+The commands that post to a PR need a GitHub token, and so do `labels`, `repo-settings`, `rulesets`, `environments` and `secrets`.
 They read `$GITHUB_TOKEN`, and fall back to `gh auth token`.
 
 ## Configuration
@@ -128,6 +129,12 @@ required-status-checks = { required-status-checks = [{ context = "test", app = "
 [tool.repoutils.secrets]
 actions = ["CODECOV_TOKEN"]
 dependabot = ["DEPENDABOT_FIX_TOKEN"]
+
+# The deployment environments `repoutils environments` checks or creates; see below.
+[tool.repoutils.environments.pypi]
+allowed-tags = ["v*"]
+
+[tool.repoutils.environments.testpypi]
 ```
 
 ### Prose
@@ -320,6 +327,42 @@ GitHub has no API that gives a GitHub App's slug from its ID.
 So `dump` collects the slugs of the apps that ran checks on the latest commit of the default branch, and of each branch the rulesets name.
 If it can't find an app's or a team's slug, it prints the ID and warns.
 Replace that ID with the slug before you run `check`.
+
+### Environments
+
+Each `[tool.repoutils.environments.<name>]` table is one of the repository's deployment environments, which a GitHub Actions job names with `environment:`.
+An empty table only asks for the environment to exist.
+A setting the table leaves out stays as it is on GitHub.
+Environment names match regardless of case, as on GitHub, which can't rename one.
+
+| Setting | Values | On GitHub |
+|---|---|---|
+| `deployment-branches` | `"all"`, `"protected"` or `"selected"` | Which branches and tags can deploy: any, protected branches only, or selected ones. |
+| `allowed-branches`, `allowed-tags` | name patterns, such as `["v*"]` | The selected branches and tags that can deploy. Each list is the complete one, and giving either implies `"selected"`. |
+| `wait-timer` | minutes, from 0 to 43200 | How long a job waits before it deploys. |
+| `reviewers` | up to six users (`"login"`) or the owner's teams (`"owner/team-slug"`) | Required reviewers, one of whom must approve a deployment. |
+| `prevent-self-review` | `true` or `false` | Stop whoever started a run from approving it. |
+| `can-admins-bypass` | `true` or `false` | Allow administrators to bypass these protection rules. |
+
+Wait timers and required reviewers need a public repository or a paid plan.
+Otherwise GitHub refuses them, and `ensure` reports an HTTP error.
+
+`repoutils environments ensure` creates each missing environment and changes every setting that differs.
+It adds and deletes allowed branches and tags to match their lists.
+Then it fails if GitHub didn't apply a change.
+It never deletes an environment, and never changes its secrets, variables or custom deployment protection rules.
+
+`repoutils environments check` changes nothing, and fails in exactly the cases where `ensure` would change something.
+`--exit-zero` and `--fail-on-unexpected` work as they do for `labels check`.
+
+`ensure` needs a token that can administer the repository, such as a fine-grained token with the Administration write permission.
+The `GITHUB_TOKEN` that GitHub Actions provides can't be given that permission.
+
+`repoutils environments dump` prints every environment the repository has, with all of its settings.
+It gives the allowed branches and tags only for `"selected"`.
+Paste the output into `pyproject.toml` and trim it down to the settings you want to keep the same.
+If you paste it in unchanged, `check --fail-on-unexpected` passes.
+`dump` neither reads nor changes `pyproject.toml`.
 
 ### Secrets
 
