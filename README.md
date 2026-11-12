@@ -385,7 +385,7 @@ Set a missing secret with `gh secret set NAME`, adding `--app dependabot` for a 
 Here `--fail-on-unexpected` fails on secrets of a listed kind that the table doesn't name.
 So `dependabot = []` means there must be no Dependabot secrets.
 
-Both commands need a token that can list the repository's secrets.
+`check` and `dump` need a token that can list the repository's secrets.
 For a fine-grained token, that's the Secrets and Dependabot secrets read permissions.
 GitHub Actions' `GITHUB_TOKEN` can't be given them.
 
@@ -399,7 +399,7 @@ It reads every workflow in `.github/workflows` for the secrets it uses, as `secr
 It fails if a workflow uses a secret that none of the three lists names.
 It also fails if a list names a secret that no workflow uses.
 So the table can't fall behind the workflows.
-It skips `GITHUB_TOKEN`, which GitHub provides, and lines that are only a comment.
+It skips `GITHUB_TOKEN`, which GitHub provides, and anything in a comment.
 
 ## Development
 

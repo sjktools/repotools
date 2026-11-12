@@ -212,10 +212,11 @@ def _workflows(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, config_text: str
 
 WORKFLOW = """
 env:
-  A: ${{ secrets.CODECOV_TOKEN }}
   B: ${{ secrets['autofix_token'] }}
   C: ${{ secrets.GITHUB_TOKEN }}
   # D: ${{ secrets.COMMENTED_OUT }}
+  E: plain  # not secrets.TRAILING_COMMENT
+  F: "issue #1 ${{ secrets.CODECOV_TOKEN }}"  # after 'a quote' secrets.ALSO_A_COMMENT
 """
 
 

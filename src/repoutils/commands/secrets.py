@@ -97,13 +97,28 @@ def load_secrets(root: Path = Path()) -> dict[str, list[str]]:
     return {key: names for key, names in _load(root).items() if key != OTHER}
 
 
+def _without_comment(line: str) -> str:
+    """line up to its YAML or shell comment: a ``#`` that starts the line or
+    follows whitespace, outside quotes. An apostrophe in plain text opens a
+    quote, so a comment after one is kept, which only errs towards a use."""
+    quote = ""
+    for i, char in enumerate(line):
+        if quote:
+            quote = "" if char == quote else quote
+        elif char in "'\"":
+            quote = char
+        elif char == "#" and (i == 0 or line[i - 1].isspace()):
+            return line[:i]
+    return line
+
+
 def workflow_secrets(root: Path = Path()) -> dict[str, list[str]]:
     """The secrets the workflows in ``root/.github/workflows`` use, other than
     GITHUB_TOKEN: each name in upper case, with the names of the files that use it.
-    Lines that are only a comment don't count."""
+    Comments don't count."""
     used: dict[str, list[str]] = {}
     for path in sorted((root / WORKFLOWS).glob("*.y*ml")):
-        lines = [line for line in path.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")]
+        lines = [_without_comment(line) for line in path.read_text(encoding="utf-8").splitlines()]
         for name in sorted({match.upper() for match in _USE_RE.findall("\n".join(lines))} - {_BUILT_IN}):
             used.setdefault(name, []).append(path.name)
     return used
