@@ -1,15 +1,17 @@
 # repoutils
 
-Repository tooling for Python projects that use uv, just and GitHub Actions, run as `repoutils <command>`.
+repoutils is a set of repository checks and CI helpers for Python projects that use uv, just and GitHub Actions.
+You run it as `repoutils <command>`.
 
-It collects the checks and CI helpers that used to live in the `scripts/` directories of [taxtracker](https://github.com/skissane/taxtracker) and [exolot](https://github.com/skissane/exolot), so each project can depend on one package instead of keeping its own copies.
+I used to keep these checks and helpers in the `scripts/` directories of several personal projects, such as [exolot](https://github.com/skissane/exolot).
+I pulled them together here so that each project can depend on one package instead of keeping its own copies.
 
-repoutils needs only the Python standard library (3.12 or later), and has no dependencies.
-That's deliberate: projects run it in CI jobs that hold write-capable tokens or check out untrusted Dependabot branches, where nothing else should be installed.
+repoutils has no dependencies, and needs only the Python standard library (3.12 or later).
+It should stay that way, because projects run it in CI jobs that hold write-capable tokens or check out untrusted Dependabot branches, and nothing else should be installed in those jobs.
 
 ## Installing
 
-Add it to its own dependency group, and include that group in `dev`:
+Give repoutils its own dependency group, and include that group in `dev`:
 
 ```toml
 [dependency-groups]
@@ -18,11 +20,12 @@ dev = [{ include-group = "repoutils" }, "pytest>=9"]
 ```
 
 Then run a command with `uv run repoutils <command>`.
-In a job with a write-capable token, use `uv run --only-group repoutils repoutils <command>`, which installs only repoutils (hash-checked against `uv.lock`) and not the project or its other dependencies.
+In a job with a write-capable token, use `uv run --only-group repoutils repoutils <command>` instead.
+That installs only repoutils, hash-checked against `uv.lock`, and not the project or its other dependencies.
 
 ## Commands
 
-Run `repoutils --help` for the list, and `repoutils <command> --help` for a command's options.
+`repoutils --help` lists the commands, and `repoutils <command> --help` shows a command's options.
 
 | Command | What it does |
 | --- | --- |
@@ -43,22 +46,23 @@ Run `repoutils --help` for the list, and `repoutils <command> --help` for a comm
 | `wait-for-base-coverage` | Waits for Codecov to have a PR base commit's coverage, so the PR's comparison works. |
 | `post-screenshots` | Uploads a directory of PNGs and posts them to a PR as a comment. |
 | `recreate-pr` | Recreates a PR as a draft from the same branch and closes the original. |
-| `labels` | `labels check` fails if the repository lacks a label `pyproject.toml` defines; `labels ensure` creates it; `labels dump` prints the repository's labels to paste in. |
-| `repo-settings` | `repo-settings check` fails if a repository setting differs from `pyproject.toml`; `repo-settings ensure` changes it; `repo-settings dump` prints the repository's settings to paste in. |
+| `labels` | Checks or creates the labels `pyproject.toml` defines, or prints the ones the repository has. |
+| `repo-settings` | Checks or changes the repository settings `pyproject.toml` gives, or prints the ones the repository has. |
 | `check-attestations` | Fails unless every distribution in `dist/` has a PEP 740 publish attestation. |
 
-The commands that post to a PR, `labels` and `repo-settings` read `$GITHUB_TOKEN`, falling back to `gh auth token`.
+The commands that post to a PR need a GitHub token, and so do `labels` and `repo-settings`.
+They read `$GITHUB_TOKEN`, and fall back to `gh auth token`.
 
 ## Configuration
 
-Every setting is optional, and lives in the project's `pyproject.toml`:
+Settings go in the project's `pyproject.toml`, and all of them are optional:
 
 ```toml
 [tool.repoutils]
-# Prefix of the hidden markers that find this project's PR comments,
+# Prefix of the hidden markers used to find this project's PR comments,
 # e.g. <!-- repoutils-patch-coverage -->.
 comment-prefix = "repoutils"
-# Compared with when there's no PR base.
+# The branch to compare with when there's no PR base.
 default-branch = "main"
 
 [tool.repoutils.sentence-per-line]
@@ -68,7 +72,8 @@ files = ["AGENTS.md", "README.md"]
 dir = "screenshots"
 
 [tool.repoutils.lock-platforms]
-# "os" allows any arch; "os:arch" one ("*" for any). "linux" matches manylinux and musllinux.
+# "os" allows any arch, and "os:arch" allows one arch ("*" for any).
+# "linux" matches manylinux and musllinux.
 supported = ["any", "linux:x86_64", "linux:aarch64", "macosx"]
 tolerated = ["ios", "pyemscripten"]
 
@@ -79,7 +84,7 @@ limit = 500
 limits = { "tests/*" = 700 }
 policy = "Split a long file only where that makes the code better."
 
-# The labels `repoutils labels` checks or creates: color and description are optional.
+# The labels that `repoutils labels` checks or creates; color and description are optional.
 [[tool.repoutils.labels]]
 name = "bug"
 color = "d73a4a"
@@ -88,7 +93,7 @@ description = "Something isn't working"
 [[tool.repoutils.labels]]
 name = "dependencies"
 
-# The repository settings `repoutils repo-settings` checks or changes; see below.
+# The repository settings that `repoutils repo-settings` checks or changes (see below).
 [tool.repoutils.repo-settings]
 description = "Repository tooling for Python projects"
 homepage = "https://pypi.org/project/repoutils/"
@@ -103,24 +108,37 @@ delete-branch-on-merge = true
 
 ### Labels
 
-`repoutils labels ensure` creates each missing label (grey, if `pyproject.toml` gives it no color), and fills in a description that's empty on GitHub with the one `pyproject.toml` gives.
-It leaves a name whose case differs, a different color or a different non-empty description as it is, and reports it, unless you pass `--strict`, which changes them to match.
-It never changes or deletes a label `pyproject.toml` doesn't define.
-If a request fails part way, the labels before it are already changed, and running `ensure` again finishes the job.
+`repoutils labels ensure` creates each label the repository lacks, grey if `pyproject.toml` gives it no color.
+Where a label's description is empty on GitHub, `ensure` fills it in with the one from `pyproject.toml`.
 
-`repoutils labels check` changes nothing, and fails exactly when `ensure`, with the same `--strict`, would change something; it reports the differences `ensure` would leave alone without failing.
-With `--fail-on-unexpected` it also fails on, and lists, the labels the repository has that `pyproject.toml` doesn't define (matching names regardless of case), so `pyproject.toml` can be the complete list; `ensure` still leaves those labels alone, so delete them on GitHub or add them to `pyproject.toml`.
-With `--exit-zero` it reports the same, but exits 0 unless it couldn't check (for example on a bad token), which `|| true` would hide.
+Other differences are reported but left alone: a name in a different case, a different color, or a different description that isn't empty.
+Pass `--strict` to have those changed to match as well.
+`ensure` never changes or deletes a label `pyproject.toml` doesn't define.
+If a request fails part way through, the labels before it have already been changed, so run `ensure` again to finish the job.
 
-In GitHub Actions, `ensure` needs `issues: write` permission, and `check` needs `issues: read` on a private repository.
+`repoutils labels check` changes nothing.
+It fails in exactly the cases where `ensure`, given the same `--strict`, would change something.
+The differences `ensure` would leave alone are reported too, but they don't make it fail.
 
-`repoutils labels dump` prints every label the repository has as `[[tool.repoutils.labels]]` entries, with its name, color and any description, for you to paste into `pyproject.toml` and edit; pasted unchanged, `check --strict` passes.
-It doesn't read `pyproject.toml` or change it.
+With `--fail-on-unexpected`, `check` also lists the labels the repository has but `pyproject.toml` doesn't define (matching names regardless of case), and fails if there are any.
+Use it when you want `pyproject.toml` to be the complete list of labels.
+`ensure` still leaves those labels alone, so you have to delete them on GitHub or add them to `pyproject.toml`.
+
+With `--exit-zero`, `check` reports the same things but exits 0, unless it couldn't do the check at all (because of a bad token, for example).
+That's the difference from `|| true`, which would hide that kind of failure as well.
+
+In GitHub Actions, `ensure` needs the `issues: write` permission, and `check` needs `issues: read` if the repository is private.
+
+`repoutils labels dump` prints every label the repository has as `[[tool.repoutils.labels]]` entries, each with its name, its color and its description if it has one.
+You can paste them into `pyproject.toml` and edit them from there.
+If you paste them in unchanged, `check --strict` passes.
+`dump` neither reads nor changes `pyproject.toml`.
 
 ### Repository settings
 
-`[tool.repoutils.repo-settings]` covers the settings on a repository's General settings page that most projects want to keep the same, mainly its Features and Pull Requests sections.
-Every one is optional, though the command fails if the table sets none, and `repoutils repo-settings` leaves a setting the table leaves out as it is on GitHub.
+`[tool.repoutils.repo-settings]` covers the settings on a repository's General settings page that most projects want to keep the same, mainly the ones in its Features and Pull Requests sections.
+All of them are optional, but `check` and `ensure` fail if the table doesn't set any.
+A setting the table leaves out stays as it is on GitHub.
 
 | Setting | Values | On GitHub |
 |---|---|---|
@@ -137,18 +155,29 @@ Every one is optional, though the command fails if the table sets none, and `rep
 | `delete-branch-on-merge` | `true` or `false` | Automatically delete head branches. |
 | `require-web-commit-signoff` | `true` or `false` | Require contributors to sign off on web-based commits. |
 
-A commit message is sent with its title, so setting only `squash-merge.message` (or `merge-commit.message`) keeps the title GitHub has; GitHub refuses some title and message pairs, which `ensure` reports as an HTTP 422 error.
+GitHub only accepts a commit message along with its title.
+So when you set only `squash-merge.message` (or `merge-commit.message`), repoutils sends the title GitHub already has.
+GitHub refuses some pairs of title and message, and `ensure` reports that as an HTTP 422 error.
 
-It deliberately can't rename, transfer or archive the repository, change its default branch or visibility, or make it a template, and rejects a table that tries.
+Some things are left out on purpose.
+`repo-settings` can't rename, transfer or archive the repository, change its default branch or visibility, or make it a template, and it rejects a table that tries to.
 
-`repoutils repo-settings ensure` changes every setting that differs, in one request, and fails if GitHub doesn't apply one (it ignores some changes, such as one an organization's policy forbids, rather than refusing them).
-`repoutils repo-settings check` changes nothing, and fails exactly when `ensure` would change something; `--exit-zero` works as it does for `labels check`.
+`repoutils repo-settings ensure` changes every setting that differs, all in one request.
+It fails if GitHub doesn't apply one of them.
+That can happen because GitHub ignores some changes rather than refusing them, such as a change an organization's policy forbids.
 
-`ensure` needs a token that can administer the repository (a fine-grained token with Administration write permission), which GitHub Actions' `GITHUB_TOKEN` can't be given.
+`repoutils repo-settings check` changes nothing, and fails in exactly the cases where `ensure` would change something.
+`--exit-zero` works the same way as it does for `labels check`.
 
-`repoutils repo-settings dump` prints every setting above as the repository has it, as `[tool.repoutils.repo-settings]` with a sub-table for each merge method, for you to paste into `pyproject.toml` and trim to the settings you want to keep the same; pasted unchanged, `check` passes.
-It doesn't read `pyproject.toml` or change it.
-If GitHub doesn't return a setting, or returns a value the table can't give, `dump` leaves it out and says so on stderr.
+`ensure` needs a token that can administer the repository, such as a fine-grained token with the Administration write permission.
+The `GITHUB_TOKEN` that GitHub Actions provides can't be given that permission.
+
+`repoutils repo-settings dump` prints every setting in the table above with the value the repository has for it.
+The output is a `[tool.repoutils.repo-settings]` table with a sub-table for each merge method.
+Paste it into `pyproject.toml` and trim it down to the settings you want to keep the same.
+If you paste it in unchanged, `check` passes.
+`dump` neither reads nor changes `pyproject.toml`.
+If GitHub doesn't return a setting, or returns a value the table can't express, `dump` leaves it out and says so on stderr.
 
 ## Development
 
