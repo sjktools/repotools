@@ -84,7 +84,7 @@ limit = 500
 limits = { "tests/*" = 700 }
 policy = "Split a long file only where that makes the code better."
 
-# The labels that `repoutils labels` checks or creates (color and description are optional).
+# The labels that `repoutils labels` checks or creates; color and description are optional.
 [[tool.repoutils.labels]]
 name = "bug"
 color = "d73a4a"
