@@ -487,3 +487,18 @@ def test_dump_no_environments(
 def test_patterns_differing_only_in_case_are_distinct(tmp_path: Path) -> None:
     (tmp_path / "pyproject.toml").write_text(TABLE + "allowed-branches = ['main', 'Main']\n")
     assert environments.load_environments(tmp_path)[0].settings["allowed-branches"] == ["main", "Main"]
+
+
+def test_reviewing_teams_must_be_the_owners(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    config = TABLE + "reviewers = ['other/devs']\n"
+    gh = FakeGitHub([_env("pypi")])
+    assert _run(tmp_path, monkeypatch, gh, ["check"], config) == 1
+    assert gh.calls == []
+    assert capsys.readouterr().err == (
+        "[tool.repoutils.environments.pypi] reviewers can only name o's teams, not 'other/devs'\n"
+    )
+    # The owner's name ignores case, as on GitHub.
+    assert _run(tmp_path, monkeypatch, FakeGitHub([_env("pypi")]), ["check"], TABLE + "reviewers = ['O/devs']\n") == 1
+    assert "can only name" not in capsys.readouterr().err

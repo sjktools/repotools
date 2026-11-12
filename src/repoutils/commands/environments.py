@@ -26,7 +26,7 @@ import subprocess
 import sys
 import urllib.error
 import urllib.parse
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -146,7 +146,7 @@ def reviewer_name(owner: str, reviewer: dict[str, Any]) -> str:
     raise RuntimeError(f"GitHub returned a required reviewer repoutils doesn't understand: {reviewer!r}")
 
 
-def current(owner: str, existing: dict[str, Any] | None, policies: Iterable[dict[str, Any]]) -> dict[str, Any]:
+def current(owner: str, existing: dict[str, Any] | None, policies: Sequence[dict[str, Any]]) -> dict[str, Any]:
     """Every setting as GitHub has it for existing (DEFAULTS if it's missing),
     with policies, its deployment branch policies."""
     if existing is None:
@@ -239,9 +239,18 @@ def branch_policies(repo: str, token: str, existing: dict[str, Any] | None) -> l
     return _pages(f"{_environment_url(repo, existing['name'])}/deployment-branch-policies", token, "branch_policies")
 
 
-def plans(repo: str, token: str, environments: Iterable[Environment]) -> tuple[list[Plan], list[dict[str, Any]]]:
+def plans(repo: str, token: str, environments: Sequence[Environment]) -> tuple[list[Plan], list[dict[str, Any]]]:
     """A plan for each environment, and every environment the repository has."""
     owner = repo.split("/", 1)[0]
+    for environment in environments:
+        for reviewer in environment.settings.get("reviewers", []):
+            org, _, team = reviewer.partition("/")
+            # An environment's reviewing teams can only be its owner's.
+            if team and org.lower() != owner.lower():
+                raise config.ConfigError(
+                    f"{TABLE[:-1]}.{_toml_key(environment.name)}] reviewers can only name {owner}'s teams, "
+                    f"not {reviewer!r}"
+                )
     existing = repo_environments(repo, token)
     by_name = {env["name"].lower(): env for env in existing}
     results = []

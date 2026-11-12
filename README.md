@@ -334,7 +334,7 @@ Environment names match regardless of case, as on GitHub, which can't rename one
 | `deployment-branches` | `"all"`, `"protected"` or `"selected"` | Which branches and tags can deploy: any, protected branches only, or selected ones. |
 | `allowed-branches`, `allowed-tags` | name patterns, such as `["v*"]` | The selected branches and tags that can deploy. Each list is the complete one, and giving either implies `"selected"`. |
 | `wait-timer` | minutes, from 0 to 43200 | How long a job waits before it deploys. |
-| `reviewers` | up to six users (`"login"`) or teams (`"org/team-slug"`) | Required reviewers, one of whom must approve a deployment. |
+| `reviewers` | up to six users (`"login"`) or the owner's teams (`"owner/team-slug"`) | Required reviewers, one of whom must approve a deployment. |
 | `prevent-self-review` | `true` or `false` | Stop whoever started a run from approving it. |
 | `can-admins-bypass` | `true` or `false` | Allow administrators to bypass these protection rules. |
 
