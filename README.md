@@ -268,7 +268,7 @@ So `non_fast_forward` is `rules.non-fast-forward`.
 A parameter left out has the default that GitHub's ruleset page gives a new rule, which is off, 0 or empty.
 The exceptions are `pull-request.allowed-merge-methods`, which allows all three methods, and `merge-queue`, which takes the page's values.
 
-`dump` writes the label that GitHub's ruleset page gives each rule and parameter as a comment above it.
+Above each rule and parameter whose label on GitHub's ruleset page repoutils knows, `dump` writes that label as a comment.
 These are the names that differ most from their labels:
 
 | In `pyproject.toml` | On GitHub's ruleset page |
