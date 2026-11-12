@@ -95,6 +95,10 @@ required-status-checks = [
     { context = "check-and-build", app = "github-actions" },
     { context = "coverage", app = "github-actions" },
     { context = "actions-lock", app = "github-actions" },
+    # These two report on the PR, but also run repoutils' own long-files and
+    # post-patch-coverage, so they fail if a PR breaks either command.
+    { context = "long-files", app = "github-actions" },
+    { context = "post-patch-coverage", app = "github-actions" },
 ]
 
 # The issue and PR labels `repoutils labels` checks or creates, as exolot and
