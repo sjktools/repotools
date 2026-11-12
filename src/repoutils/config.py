@@ -5,6 +5,7 @@ Every setting has a default, so a project with no table (or no
 """
 
 import json
+import math
 import tomllib
 from pathlib import Path
 from typing import Any
@@ -49,9 +50,10 @@ def string_list(table: dict[str, Any], key: str, default: list[str], where: str)
 
 
 def number(table: dict[str, Any], key: str, default: float, where: str) -> float:
-    """``table[key]`` as a number that isn't negative, or ``default`` if it's missing."""
+    """``table[key]`` as a finite number that isn't negative, or ``default`` if it's missing."""
     value = table.get(key, default)
-    if isinstance(value, bool) or not isinstance(value, int | float) or value < 0:
+    # TOML has inf and nan, and no rate is ever over either, so they would turn a limit off unseen.
+    if isinstance(value, bool) or not isinstance(value, int | float) or not math.isfinite(value) or value < 0:
         raise ConfigError(f"{where} {key} must be a number, 0 or more")
     return value
 

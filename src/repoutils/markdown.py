@@ -14,24 +14,35 @@ INLINE_CODE_RE = re.compile(r"(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)")
 # What a code span becomes in a sentence's text: one word, whatever the code was.
 CODE = "CODE"
 
-_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+# A code span that may run over a paragraph's wrapped lines.
+_WRAPPED_CODE_RE = re.compile(INLINE_CODE_RE.pattern, re.DOTALL)
+# What stands for a code fence while a document's lines are read: no comment
+# runs over it, and it ends a paragraph.
+_FENCE = "\0"
+_COMMENT_RE = re.compile(r"<!--[^\0]*?-->")
 _LIST_ITEM_RE = re.compile(r"(?:[-*+]|\d+[.)])\s+(.*)")
 _RULE_RE = re.compile(r"[-*_=\s]{3,}")
-_HTML_RE = re.compile(r"</?[a-zA-Z]")
+_HTML_RE = re.compile(r"</?([a-zA-Z][a-zA-Z0-9-]*)(?=[\s/>]|$)")
+# Tags that mark up words inside a sentence; a line that starts with any other tag is an HTML block.
+_INLINE_TAGS = frozenset(
+    "a abbr b br cite code del em i img ins kbd mark q s samp small span strong sub sup u var".split()
+)
 _LINK_DEFINITION_RE = re.compile(r"\[[^\]]+\]:\s")
 _IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
 _LINK_RE = re.compile(r"\[([^\]]*)\](?:\([^)]*\)|\[[^\]]*\])")
 _TAG_RE = re.compile(r"<[^>]+>")
-_URL_RE = re.compile(r"https?://\S+")
+# A bare URL, without the punctuation that closes its sentence or its brackets.
+_URL_RE = re.compile(r"https?://\S+?(?=[.,!?;:)\]\"']*(?:\s|$))")
 _EMPHASIS_RE = re.compile(r"(\*\*|__|\*|_)(\S.*?\S|\S)\1")
 # "etc." isn't here: it usually ends its sentence, and it only splits one before a capital anyway.
 _ABBREVIATION_RE = re.compile(r"\b(?:e\.g|i\.e|vs)\.", re.IGNORECASE)
 # The gap between two sentences: after closing punctuation, before a capital, a digit or code.
-_BOUNDARY_RE = re.compile(r"(?:(?<=[.!?])|(?<=[.!?][\"')\]]))\s+(?=[\"'(\[]?[A-Z0-9])")
+# The group is the next sentence's first character, which the pattern can't test for a capital in every script.
+_BOUNDARY_RE = re.compile(r"(?:(?<=[.!?])|(?<=[.!?][\"')\]]))\s+(?=[\"'(\[]?(\w))")
 _SENTENCE_END_RE = re.compile(r"[.!?:][\"')\]]?$")
 # A line that ends a sentence, so that the next line starts one, even with a lowercase word.
 _LINE_END_RE = re.compile(r"[.!?][\"')\]]?$")
-_WORD_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9'’.-]*")
+_WORD_RE = re.compile(r"[^\W_][\w'’.-]*")
 # A sentence has at least this many words; anything shorter is a label or a fragment.
 MIN_WORDS = 3
 
@@ -76,7 +87,6 @@ def words(text: str) -> list[str]:
 
 
 def _clean(line: str) -> str:
-    line = INLINE_CODE_RE.sub(CODE, line)
     line = _IMAGE_RE.sub("", line)
     line = _LINK_RE.sub(r"\1", line)
     line = _TAG_RE.sub("", line)
@@ -87,56 +97,90 @@ def _clean(line: str) -> str:
 
 def _skipped(stripped: str) -> bool:
     # Headings, tables, block quotes (often terminal output), rules, HTML and link definitions aren't prose.
+    tag = _HTML_RE.match(stripped)
     return bool(
         stripped.startswith(("#", "|", ">"))
         or _RULE_RE.fullmatch(stripped)
-        or _HTML_RE.match(stripped)
+        or (tag and tag[1].lower() not in _INLINE_TAGS)
         or _LINK_DEFINITION_RE.match(stripped)
     )
 
 
+def _prose_lines(text: str) -> Iterator[tuple[int, str]]:
+    """Each line outside a code fence, with its number and without its comments; a fence is one ``_FENCE`` line."""
+    lines = [_FENCE] * len(text.splitlines())
+    for number, line in unfenced_lines(text):
+        lines[number - 1] = line
+    # Keep a comment's newlines, so the lines after it keep their numbers.
+    uncommented = _COMMENT_RE.sub(lambda match: "\n" * match[0].count("\n"), "\n".join(lines))
+    in_fence = False
+    for number, line in enumerate(uncommented.split("\n"), 1):
+        if line != _FENCE:
+            in_fence = False
+            yield number, line
+        elif not in_fence:
+            in_fence = True
+            yield number, line
+
+
+def _indent(line: str) -> int:
+    expanded = line.expandtabs(4)
+    return len(expanded) - len(expanded.lstrip())
+
+
+def _cleaned(block: list[tuple[int, str]]) -> list[tuple[int, str]]:
+    """The block's lines with their markup reduced to words, less the lines that leaves empty."""
+    # A code span can run over wrapped lines: put ``CODE`` on its first line, and keep the line breaks.
+    masked = _WRAPPED_CODE_RE.sub(
+        lambda match: CODE + "\n" * match[0].count("\n"), "\n".join(line for _, line in block)
+    )
+    cleaned = [(number, _clean(line)) for (number, _), line in zip(block, masked.split("\n"), strict=True)]
+    return [(number, line) for number, line in cleaned if line]
+
+
 def _blocks(text: str) -> list[tuple[bool, list[tuple[int, str]]]]:
     """The paragraphs and list items, each as whether it's in a list item and its (line number, cleaned text) lines."""
-    # Keep a comment's newlines, so the lines after it keep their numbers.
-    text = _COMMENT_RE.sub(lambda match: "\n" * match[0].count("\n"), text)
     blocks: list[tuple[bool, list[tuple[int, str]]]] = []
     block: list[tuple[int, str]] = []
     block_in_list = False
     after_blank = True
     in_list = False
+    # The column an indented code block starts at: four past the text of the list item it's in, if any.
+    code_indent = 4
 
     def flush() -> None:
         nonlocal block
-        if block:
-            blocks.append((block_in_list, block))
+        cleaned = _cleaned(block) if block else []
+        if cleaned:
+            blocks.append((block_in_list, cleaned))
         block = []
 
-    for number, line in unfenced_lines(text):
+    for number, line in _prose_lines(text):
         stripped = line.strip()
-        if not stripped:
+        if not stripped or line == _FENCE:
             flush()
             after_blank = True
             continue
-        indented = line.startswith(("    ", "\t"))
-        # Indented text after a blank line is a code block, unless it continues a list item.
-        if _skipped(stripped) or (indented and after_blank and not in_list):
+        indent = _indent(line)
+        # Indented text after a blank line is a code block, unless it's a list item's own paragraph.
+        if _skipped(stripped) or (after_blank and indent >= code_indent):
             flush()
-            after_blank = indented
+            after_blank = indent >= code_indent
             continue
         after_blank = False
         item = _LIST_ITEM_RE.match(stripped)
         if item:
             flush()
             in_list = True
+            code_indent = indent + len(stripped) - len(item[1]) + 4
             stripped = item[1]
-        elif not block and not line.startswith((" ", "\t")):
+        elif not block and not indent:
             # A paragraph that isn't indented at all ends the list; a "- " item's own paragraphs have two spaces.
             in_list = False
-        cleaned = _clean(stripped)
-        if cleaned:
-            if not block:
-                block_in_list = in_list
-            block.append((number, cleaned))
+            code_indent = 4
+        if not block:
+            block_in_list = in_list
+        block.append((number, stripped))
     flush()
     return blocks
 
@@ -151,7 +195,11 @@ def _split(block: list[tuple[int, str]], in_list: bool) -> Iterator[Sentence]:
     # Hide an abbreviation's full stop from the boundary search, without moving anything.
     hidden = _ABBREVIATION_RE.sub(lambda match: match[0][:-1] + "\0", joined)
     # Each gap between two sentences, as where one ends and where the next begins.
-    gaps = {(boundary.start(), boundary.end()) for boundary in _BOUNDARY_RE.finditer(hidden)}
+    gaps = {
+        (boundary.start(), boundary.end())
+        for boundary in _BOUNDARY_RE.finditer(hidden)
+        if boundary[1].isupper() or boundary[1].isdigit()
+    }
     for (line_start, _), (next_start, _) in zip(starts, starts[1:], strict=False):
         if _LINE_END_RE.search(hidden[line_start : next_start - 1]):
             gaps.add((next_start - 1, next_start))
@@ -165,7 +213,8 @@ def _split(block: list[tuple[int, str]], in_list: bool) -> Iterator[Sentence]:
 def prose_sentences(text: str) -> list[Sentence]:
     """The document's prose sentences, in order.
 
-    Code blocks, headings, tables, block quotes and HTML are left out. Inline
+    Code blocks, headings, tables, block quotes, comments and lines that start
+    with an HTML block tag are left out. Inline
     code becomes the single word ``CODE``, a link becomes its text, and a bare
     URL becomes ``URL``. A paragraph's wrapped lines are joined, and each list
     item is read on its own, and its sentences are marked. A sentence ends

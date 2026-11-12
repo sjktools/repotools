@@ -147,6 +147,22 @@ def test_too_few_sentences_to_judge(project: Path, capsys: pytest.CaptureFixture
     assert "AGENTS.md: 0 sentences, too few to judge" in capsys.readouterr().out
 
 
+def test_stats_show_the_rates_of_a_file_too_short_to_judge(project: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    (project / "README.md").write_text("It runs; it stops.\n")
+    (project / "AGENTS.md").write_text("")
+    assert check_prose.main(show_stats=True) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "AGENTS.md: 0 sentences, too few to judge (min-sentences is 15).",
+        "README.md: 1 sentences, too few to judge (min-sentences is 15):",
+        "- 4.00 words per sentence (limit 18)",
+        "- 0.00 % of sentences over 30 words (limit 12)",
+        "- 100.00 % of sentences outside lists under 8 words (limit 25)",
+        "- 0.00 commas per sentence (limit 1.3)",
+        "- 1.00 semicolons per sentence (limit 0.05)",
+        "- 1.00 clause joints per sentence (limit 0.6)",
+    ]
+
+
 def test_no_files(project: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert check_prose.main() == 0
     assert capsys.readouterr().out == "No files to check.\n"

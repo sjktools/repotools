@@ -4,8 +4,8 @@ The files are ``[tool.repoutils.prose]``'s ``files`` (default ``AGENTS.md``
 and ``README.md``), or the ones given; a missing configured file is skipped.
 
 It measures each file's prose sentences (see ``repoutils.markdown``) and fails
-a file whose rate is over a limit. One sentence never fails a file: the worst
-ones are listed to show where to start.
+a file whose rate is over a limit. The limits are on a whole file's rates and
+not on each sentence, and the worst sentences are listed to show where to start.
 
 The default limits sit between READMEs people wrote before language models and
 documents that read as machine-written: those have much longer sentences, with
@@ -151,6 +151,11 @@ def _snippet(text: str) -> str:
     return text if len(text) <= SNIPPET else text[: SNIPPET - 1].rstrip() + "…"
 
 
+def _rate(metric: Metric, sentences: list[Sentence], limit: float | None) -> str:
+    note = "no limit" if limit is None else f"limit {limit:g}"
+    return f"- {metric.value(sentences):.2f} {metric.name} ({note})"
+
+
 def _report(
     path: str, sentences: list[Sentence], limits: list[tuple[Metric, float | None]], *, show_stats: bool
 ) -> bool:
@@ -159,13 +164,11 @@ def _report(
     failed = False
     hinted: set[tuple[str, bool]] = set()
     for metric, limit in limits:
-        value = metric.value(sentences)
         over = metric.over(sentences, limit)
         failed = failed or over
         if not over and not show_stats:
             continue
-        note = "no limit" if limit is None else f"limit {limit:g}"
-        lines.append(f"- {value:.2f} {metric.name} ({note}){' <- over' if over and show_stats else ''}")
+        lines.append(_rate(metric, sentences, limit) + (" <- over" if over and show_stats else ""))
         # Two rates can count the same thing (words); list its worst sentences once.
         if over and (metric.unit, metric.lowest_first) not in hinted:
             hinted.add((metric.unit, metric.lowest_first))
@@ -198,7 +201,12 @@ def main(paths: list[str] | None = None, *, exit_zero: bool = False, show_stats:
         sentences = prose_sentences(Path(path).read_text(encoding="utf-8"))
         # No sentences means no rates, whatever min-sentences is.
         if len(sentences) < max(min_sentences, 1):
-            print(f"{path}: {len(sentences)} sentences, too few to judge (min-sentences is {min_sentences}).")
+            # Its rates are still worth seeing, though no limit applies to them.
+            rates = [_rate(metric, sentences, limit) for metric, limit in limits] if show_stats and sentences else []
+            end = ":" if rates else "."
+            print(f"{path}: {len(sentences)} sentences, too few to judge (min-sentences is {min_sentences}){end}")
+            for rate in rates:
+                print(rate)
         elif _report(path, sentences, limits, show_stats=show_stats):
             failed.append(path)
     if not paths:

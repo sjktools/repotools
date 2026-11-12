@@ -57,6 +57,16 @@ def test_numbers(tmp_path: Path) -> None:
             r"\[x\] limit must be a number, 0 or more$",
         ),
         (
+            "[tool.repoutils.x]\nlimit = inf\n",
+            lambda root: config.number(config.section("x", root), "limit", 1, "[x]"),
+            r"\[x\] limit must be a number, 0 or more$",
+        ),
+        (
+            "[tool.repoutils.x]\nlimit = nan\n",
+            lambda root: config.optional_number(config.section("x", root), "limit", 1, "[x]"),
+            "limit must be a number, 0 or more, or false",
+        ),
+        (
             "[tool.repoutils.x]\nlimit = 2.5\n",
             lambda root: config.integer(config.section("x", root), "limit", 1, "[x]"),
             r"\[x\] limit must be a whole number, 0 or more$",

@@ -124,8 +124,14 @@ That limit leaves out list items, where a terse sentence is at home.
 It also leaves out a sentence that ends in a colon, which leads into a list or a code block.
 Treat the limits as ceilings and not as targets, and leave a sentence alone if the file already passes.
 
-The command skips code blocks, headings, tables, block quotes and HTML, and counts inline code as one word.
+The command skips code blocks, headings, tables, block quotes, comments and any line that starts with an HTML block tag.
+It counts inline code as one word.
 A bullet that isn't a full sentence isn't counted.
+
+It reads sentences as English punctuates them.
+A sentence ends at a full stop, a question mark or an exclamation mark, and the next one starts with a capital, a digit or inline code.
+A new line after one of those marks starts a sentence too, whatever its first word is.
+So in a wrapped paragraph, a sentence that starts mid-line with a lowercase word, such as "uv", is read as part of the one before it.
 
 | Setting | Default | What it limits |
 |---|---|---|
@@ -141,7 +147,7 @@ Set a limit to `false` to turn it off.
 A file with fewer than `min-sentences` sentences (default 15) is too short to judge, and passes.
 `min-sentences`, `long-sentence-words` and `short-sentence-words` are whole numbers.
 
-The limits apply to a whole file, so one long sentence never fails it.
+The limits apply to a whole file's rates and not to each sentence, so a file with a few long sentences can still pass.
 Under each limit that a file is over, the command lists the five sentences that add most to it.
 The two limits on long sentences share one list, under the first of them that the file is over.
 `--stats` prints every rate for every file, and `--exit-zero` reports the same but exits 0.

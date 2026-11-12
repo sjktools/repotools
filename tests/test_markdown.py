@@ -157,6 +157,118 @@ def test_sentences_in_list_items_are_marked() -> None:
     ]
 
 
+def test_a_bare_url_keeps_the_punctuation_after_it() -> None:
+    assert _sentences("""\
+        See the docs at https://example.com/x. The next sentence is here.
+        It is on the site (https://example.com/a_(b)), which is up. Is it at https://example.com/?
+        """) == [
+        (1, "See the docs at URL."),
+        (1, "The next sentence is here."),
+        (2, "It is on the site (URL)), which is up."),
+        (2, "Is it at URL?"),
+    ]
+
+
+def test_a_code_fence_ends_a_paragraph() -> None:
+    assert _sentences("""\
+        Run this command now:
+        ```
+        make it. Then go.
+        ```
+        ~~~
+        ~~~
+        Then the tool prints what it found.
+        """) == [(1, "Run this command now:"), (7, "Then the tool prints what it found.")]
+
+
+def test_a_comment_does_not_run_over_a_code_fence() -> None:
+    assert _sentences("""\
+        A comment starts <!-- here
+        and ends here --> and the sentence goes on.
+
+        ```html
+        <!-- This one is code, and never closes.
+        ```
+
+        The prose after the fence is read. <!-- So is this comment. -->
+        This line is prose too.
+        """) == [
+        (1, "A comment starts and the sentence goes on."),
+        (8, "The prose after the fence is read."),
+        (9, "This line is prose too."),
+    ]
+
+
+def test_a_line_that_starts_with_an_inline_tag_is_prose() -> None:
+    assert _sentences("""\
+        <kbd>Ctrl</kbd> and C stop the tool.
+        <B>Bold words</B> start this one.
+        <https://example.com/> is the site to see.
+
+        <details>
+        <summary>A summary is not prose.</summary>
+        </details>
+        <br>
+        """) == [
+        (1, "Ctrl and C stop the tool."),
+        (2, "Bold words start this one."),
+        (3, "is the site to see."),
+    ]
+
+
+def test_a_code_span_can_run_over_wrapped_lines() -> None:
+    assert _sentences("""\
+        Run `first. Second
+        third. Fourth` to see it work. Then stop it
+        with `one
+        two`
+        and a key.
+        """) == [(1, "Run CODE to see it work."), (2, "Then stop it with CODE and a key.")]
+
+
+def test_indented_code_in_a_list_item_is_not_prose() -> None:
+    assert _sentences("""\
+        - The item is prose.
+
+          So is its second paragraph.
+
+              This is the item's code. It is not prose.
+              Nor is this line.
+
+        \t1. A nested item is prose.
+
+        \t   Its paragraph is prose too.
+
+        \t       This is its code.
+
+        After the list comes prose.
+
+            This is code again.
+        """) == [
+        (1, "The item is prose."),
+        (3, "So is its second paragraph."),
+        (8, "A nested item is prose."),
+        (10, "Its paragraph is prose too."),
+        (14, "After the list comes prose."),
+    ]
+
+
+def test_words_and_capitals_in_other_scripts_count() -> None:
+    assert words("Voilà une phrase très naïve, n'est-ce pas?") == [
+        "Voilà",
+        "une",
+        "phrase",
+        "très",
+        "naïve",
+        "n'est-ce",
+        "pas",
+    ]
+    assert _sentences("Voilà une phrase. École fermée aujourd'hui. été comme hiver, ça marche.\n") == [
+        (1, "Voilà une phrase."),
+        (1, "École fermée aujourd'hui. été comme hiver, ça marche."),
+    ]
+
+
 def test_a_line_of_markup_alone_is_nothing() -> None:
     assert prose_sentences("![logo](logo.png)\n\n") == []
     assert prose_sentences("") == []
