@@ -268,6 +268,21 @@ So `non_fast_forward` is `rules.non-fast-forward`.
 A parameter left out has the default that GitHub's ruleset page gives a new rule, which is off, 0 or empty.
 The exceptions are `pull-request.allowed-merge-methods`, which allows all three methods, and `merge-queue`, which takes the page's values.
 
+`dump` writes the label that GitHub's ruleset page gives each rule and parameter as a comment above it.
+These are the names that differ most from their labels:
+
+| In `pyproject.toml` | On GitHub's ruleset page |
+|---|---|
+| `rules.deletion` | Restrict deletions |
+| `rules.non-fast-forward` | Block force pushes |
+| `required-status-checks.strict-required-status-checks-policy` | Require branches to be up to date before merging |
+| `required-status-checks.do-not-enforce-on-create` | Do not require status checks on creation |
+| `pull-request.dismiss-stale-reviews-on-push` | Dismiss stale pull request approvals when new commits are pushed |
+| `pull-request.require-last-push-approval` | Require approval of the most recent reviewable push |
+| `pull-request.required-review-thread-resolution` | Require conversation resolution before merging |
+| `merge-queue.max-entries-to-build` | Build concurrency |
+| `merge-queue.grouping-strategy` | Require all queue entries to pass required checks (`"ALLGREEN"`) or not (`"HEADGREEN"`) |
+
 A required status check is `{ context = "test", app = "github-actions" }`.
 `app` is the slug of the GitHub App that must report the check.
 Leave it out to accept the check from any source.

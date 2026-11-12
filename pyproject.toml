@@ -81,7 +81,7 @@ non-fast-forward = true
 allowed-merge-methods = ["squash"]
 
 [tool.repoutils.rulesets.main.rules.required-status-checks]
-# A PR's branch must be up to date with main, so its checks ran against what it merges into.
+# "Require branches to be up to date before merging", so a PR's checks ran against what it merges into.
 strict-required-status-checks-policy = true
 required-status-checks = [
     { context = "test (ubuntu-latest, 3.12)", app = "github-actions" },

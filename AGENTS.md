@@ -27,6 +27,7 @@ It supports Python 3.12 and later, so don't use newer syntax or `typing` feature
   Every setting has a default, and command-line options override it.
 - `src/repoutils/ruleset_format.py` is the `rulesets` command's pyproject.toml format, and its conversion to and from GitHub's ruleset JSON.
   It's kept apart from the command for length.
+  `src/repoutils/ruleset_labels.py` gives the labels GitHub's ruleset page uses, which `dump` writes as comments.
 - `src/repoutils/github.py` holds the GitHub API helpers the posting commands share.
   They are a request function that never follows a redirect with the token to another host, paginated comment listing, `upsert_comment` and `hide_comments`.
 - `src/repoutils/markdown.py` holds the Markdown reading that `check-sentence-per-line` and `check-prose` share.

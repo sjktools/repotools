@@ -4,7 +4,8 @@ from typing import Any
 import pytest
 
 from repoutils import config
-from repoutils.ruleset_format import Names, diff, dump_toml, from_github, load_rulesets, to_github
+from repoutils.ruleset_format import RULES, Names, diff, dump_toml, from_github, load_rulesets, to_github
+from repoutils.ruleset_labels import LABELS
 
 CONFIG = """
 [tool.repoutils.rulesets.main]
@@ -118,7 +119,10 @@ def test_round_trip(tmp_path: Path) -> None:
     text, warnings = dump_toml([to_github(name, r, NAMES) for name, r in rulesets.items()], NAMES)
     assert warnings == []
     assert '[tool.repoutils.rulesets."Release tags"]\n' in text
-    assert "[tool.repoutils.rulesets.main.rules]\ndeletion = true\nnon-fast-forward = true\n" in text
+    assert "[tool.repoutils.rulesets.main.rules]\n# Restrict deletions\ndeletion = true\n" in text
+    assert "# Block force pushes\nnon-fast-forward = true\n" in text
+    assert "# Require a pull request before merging\n[tool.repoutils.rulesets.main.rules.pull-request]\n" in text
+    assert "# Required approvals\nrequired-approving-review-count = " in text
     assert _load(tmp_path, text) == rulesets
 
 
@@ -241,3 +245,9 @@ def test_malformed(tmp_path: Path, table: str, message: str) -> None:
     with pytest.raises(config.ConfigError) as error:
         _load(tmp_path, f"[tool.repoutils.rulesets]\n{table}\n")
     assert message in str(error.value)
+
+
+def test_every_label_names_a_known_rule_or_parameter() -> None:
+    for key in LABELS:
+        rule, _, param = key.partition(".")
+        assert rule in RULES and (not param or param in RULES[rule]), key

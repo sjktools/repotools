@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from repoutils import config
+from repoutils.ruleset_labels import LABELS
 
 TABLE = "[tool.repoutils.rulesets]"
 ENFORCEMENTS = ("active", "evaluate", "disabled")
@@ -443,6 +444,12 @@ def diff(theirs: dict[str, Any], ours: dict[str, Any]) -> list[str]:
     return changes
 
 
+def _label(rule: str, param: str | None = None) -> str:
+    """A comment line giving GitHub's ruleset page's label for a rule or parameter, if repoutils knows it."""
+    label = LABELS.get(_snake(rule if param is None else f"{rule}.{param}"))
+    return f"# {label}\n" if label else ""
+
+
 def dump_toml(rulesets: Iterable[dict[str, Any]], names: Names) -> tuple[str, list[str]]:
     """GitHub's rulesets as TABLE's sub-tables, and a warning on each thing in them check would refuse."""
     entries, warnings = [], []
@@ -452,10 +459,12 @@ def dump_toml(rulesets: Iterable[dict[str, Any]], names: Names) -> tuple[str, li
         lines = [f"{header}]"] + [f"{key} = {_toml_block(values[key])}" for key in KEYS[:-1] if key in values]
         rules = values.get("rules", {})
         if any(not params for params in rules.values()):
-            lines += ["", f"{header}.rules]"] + [f"{key} = true" for key, params in rules.items() if not params]
+            lines += ["", f"{header}.rules]"]
+            lines += [f"{_label(key)}{key} = true" for key, params in rules.items() if not params]
         for key, params in rules.items():
             if params:
-                lines += ["", f"{header}.rules.{key}]"] + [f"{p} = {_toml_block(v)}" for p, v in params.items()]
+                lines += ["", f"{_label(key)}{header}.rules.{key}]"]
+                lines += [f"{_label(key, p)}{p} = {_toml_block(v)}" for p, v in params.items()]
         entries.append("".join(f"{line}\n" for line in lines))
         checks = rules.get("required-status-checks", {}).get("required-status-checks", [])
         for entry in [*values.get("bypass", []), *checks]:
