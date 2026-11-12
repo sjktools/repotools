@@ -49,9 +49,10 @@ That installs only repoutils, hash-checked against `uv.lock`, and not the projec
 | `recreate-pr` | Recreates a PR as a draft from the same branch and closes the original. |
 | `labels` | Checks or creates the labels `pyproject.toml` defines, or prints the ones the repository has. |
 | `repo-settings` | Checks or changes the repository settings `pyproject.toml` gives, or prints the ones the repository has. |
+| `rulesets` | Checks, creates or updates the branch rulesets `pyproject.toml` defines, or prints the ones the repository has. |
 | `check-attestations` | Fails unless every distribution in `dist/` has a PEP 740 publish attestation. |
 
-The commands that post to a PR need a GitHub token, and so do `labels` and `repo-settings`.
+The commands that post to a PR need a GitHub token, and so do `labels`, `repo-settings` and `rulesets`.
 They read `$GITHUB_TOKEN`, and fall back to `gh auth token`.
 
 ## Configuration
@@ -110,6 +111,17 @@ squash-merge = { allow = true, title = "pr-title", message = "pr-body" }
 merge-commit.allow = false
 rebase-merge.allow = false
 delete-branch-on-merge = true
+
+# A branch ruleset `repoutils rulesets` checks or creates, giving only what isn't a default; see below.
+[tool.repoutils.rulesets.main]
+include = ["~DEFAULT_BRANCH"]
+bypass = [{ role = "admin", mode = "pull-request" }]
+
+[tool.repoutils.rulesets.main.rules]
+deletion = true
+non-fast-forward = true
+pull-request = { allowed-merge-methods = ["squash"] }
+required-status-checks = { required-status-checks = [{ context = "test", app = "github-actions" }] }
 ```
 
 ### Prose
@@ -229,6 +241,79 @@ Paste it into `pyproject.toml` and trim it down to the settings you want to keep
 If you paste it in unchanged, `check` passes.
 `dump` neither reads nor changes `pyproject.toml`.
 If GitHub doesn't return a setting, or returns a value the table can't express, `dump` leaves it out and says so on stderr.
+
+### Rulesets
+
+Each `[tool.repoutils.rulesets.<name>]` table is one of the repository's branch rulesets (Settings, Rules, Rulesets).
+It gives only what isn't a new ruleset's default.
+Anything it leaves out is off or empty, so the table is the whole ruleset.
+`ensure` turns off any rule the table leaves out.
+
+Tag rulesets and push rulesets are left alone.
+So are rulesets the repository inherits from its organization, and legacy branch protection rules.
+
+| Setting | Values | On GitHub |
+|---|---|---|
+| `enforcement` | `"active"` (the default), `"evaluate"` or `"disabled"` | Whether the ruleset is enforced. |
+| `include`, `exclude` | branch name patterns, such as `["main", "release/*"]`, or `"~DEFAULT_BRANCH"` or `"~ALL"` | The branches it targets. `refs/heads/` is optional. `include` is required. |
+| `bypass` | a list of tables (see below) | Who can bypass the ruleset. |
+| `rules.<rule>` | `true`, or a table of the rule's parameters | Each rule that's on. |
+
+Each `bypass` entry names one actor.
+That's `role` (`"admin"`, `"maintain"`, `"write"` or a custom role's ID), `app` (a GitHub App's slug), `team` (a team's slug), `org-admin = true` or `deploy-keys = true`.
+It can also give a `mode`: `"always"` (the default), `"pull-request"` or `"exempt"`.
+
+Rules and their parameters have the names that GitHub's REST API and a ruleset's JSON export use, in kebab case.
+So `non_fast_forward` is `rules.non-fast-forward`.
+A parameter left out has the default that GitHub's ruleset page gives a new rule, which is off, 0 or empty.
+The exceptions are `pull-request.allowed-merge-methods`, which allows all three methods, and `merge-queue`, which takes the page's values.
+
+Above each rule and parameter whose label on GitHub's ruleset page repoutils knows, `dump` writes that label as a comment.
+These are the names that differ most from their labels:
+
+| In `pyproject.toml` | On GitHub's ruleset page |
+|---|---|
+| `rules.deletion` | Restrict deletions |
+| `rules.non-fast-forward` | Block force pushes |
+| `required-status-checks.strict-required-status-checks-policy` | Require branches to be up to date before merging |
+| `required-status-checks.do-not-enforce-on-create` | Do not require status checks on creation |
+| `pull-request.dismiss-stale-reviews-on-push` | Dismiss stale pull request approvals when new commits are pushed |
+| `pull-request.require-last-push-approval` | Require approval of the most recent reviewable push |
+| `pull-request.required-review-thread-resolution` | Require conversation resolution before merging |
+| `merge-queue.max-entries-to-build` | Build concurrency |
+| `merge-queue.grouping-strategy` | Require all queue entries to pass required checks (`"ALLGREEN"`) or not (`"HEADGREEN"`) |
+
+A required status check is `{ context = "test", app = "github-actions" }`.
+`app` is the slug of the GitHub App that must report the check.
+Leave it out to accept the check from any source.
+`check` and `ensure` look up the app's ID themselves, and refuse an ID in `pyproject.toml`.
+
+`repoutils rulesets ensure` creates each missing ruleset.
+It replaces each one that differs with the table's, sending every parameter of each rule.
+Then it fails if GitHub didn't apply a change.
+It ignores a rule parameter repoutils doesn't know, so `ensure` may reset one.
+It never deletes a ruleset.
+
+`repoutils rulesets check` changes nothing, and fails in exactly the cases where `ensure` would change something.
+`--exit-zero` and `--fail-on-unexpected` work as they do for `labels check`.
+Here `--fail-on-unexpected` fails on branch rulesets that `pyproject.toml` doesn't define.
+
+All three need a token that can administer the repository, because GitHub shows a ruleset's bypass list only to such a token.
+For a fine-grained token, that's Administration write for `ensure`, and read for `check` and `dump`.
+GitHub Actions' `GITHUB_TOKEN` can't be given it.
+If a bypass list names a team, the token also needs the organization's Members read permission, to look the team up.
+
+`repoutils rulesets dump` prints every branch ruleset the repository has as these tables.
+You can paste them into `pyproject.toml`.
+If you paste them in unchanged, `check --fail-on-unexpected` passes, unless `dump` warned about something `check` refuses.
+With `--from-file`, it prints the rulesets in JSON files exported from GitHub's ruleset page instead.
+That lets you design a ruleset in GitHub's UI, on any repository, and convert it.
+`dump` neither reads nor changes `pyproject.toml`.
+
+GitHub has no API that gives a GitHub App's slug from its ID.
+So `dump` collects the slugs of the apps that ran checks on the latest commit of the default branch, and of each branch the rulesets name.
+If it can't find an app's or a team's slug, it prints the ID and warns.
+Replace that ID with the slug before you run `check`.
 
 ## Development
 

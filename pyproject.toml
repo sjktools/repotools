@@ -63,6 +63,44 @@ allow-update-branch = true
 delete-branch-on-merge = true
 require-web-commit-signoff = false
 
+# The branch rulesets `repoutils rulesets` checks or creates, each giving only
+# what differs from a new ruleset's defaults. main changes only by a squash-merged
+# PR whose CI passed: every test job (GitHub counts a skipped required check as
+# passed, so check-and-build, which needs them, isn't enough alone) and the rest
+# of ci.yml (check-and-build isn't named build, as attestations.yml has one). Admins
+# may bypass that for a PR, but nobody can push to main directly or delete it.
+[tool.repoutils.rulesets.main]
+include = ["~DEFAULT_BRANCH"]
+bypass = [{ role = "admin", mode = "pull-request" }]
+
+[tool.repoutils.rulesets.main.rules]
+deletion = true
+non-fast-forward = true
+
+[tool.repoutils.rulesets.main.rules.pull-request]
+allowed-merge-methods = ["squash"]
+
+[tool.repoutils.rulesets.main.rules.required-status-checks]
+# "Require branches to be up to date before merging", so a PR's checks ran against what it merges into.
+strict-required-status-checks-policy = true
+required-status-checks = [
+    { context = "test (ubuntu-latest, 3.12)", app = "github-actions" },
+    { context = "test (ubuntu-latest, 3.13)", app = "github-actions" },
+    { context = "test (ubuntu-latest, 3.14)", app = "github-actions" },
+    { context = "test (ubuntu-latest, 3.15)", app = "github-actions" },
+    { context = "test (macos-latest, 3.12)", app = "github-actions" },
+    { context = "test (macos-latest, 3.13)", app = "github-actions" },
+    { context = "test (macos-latest, 3.14)", app = "github-actions" },
+    { context = "test (macos-latest, 3.15)", app = "github-actions" },
+    { context = "check-and-build", app = "github-actions" },
+    { context = "coverage", app = "github-actions" },
+    { context = "actions-lock", app = "github-actions" },
+    # These two report on the PR, but also run repoutils' own long-files and
+    # post-patch-coverage, so they fail if a PR breaks either command.
+    { context = "long-files", app = "github-actions" },
+    { context = "post-patch-coverage", app = "github-actions" },
+]
+
 # The issue and PR labels `repoutils labels` checks or creates, as exolot and
 # taxtracker use them (see AGENTS.md); .github/dependabot.yml applies two.
 [[tool.repoutils.labels]]
