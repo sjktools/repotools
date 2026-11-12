@@ -143,9 +143,9 @@ whitespace-check:
 sentence-per-line-check:
     uv run repoutils check-sentence-per-line
 
-# Report AGENTS.md and README.md prose with long, clause-heavy sentences or too many short ones, without failing (until both pass)
+# Check AGENTS.md and README.md prose for long, clause-heavy sentences, or too many short ones
 prose-check:
-    uv run repoutils check-prose --exit-zero
+    uv run repoutils check-prose
 
 # Check that every workflow and local action pins the uv version pyproject.toml requires and the just version the justfile requires
 check-pins:
