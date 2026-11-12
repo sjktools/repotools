@@ -146,6 +146,7 @@ def _blocks(text: str) -> list[tuple[bool, list[tuple[int, str]]]]:
     block_in_list = False
     after_blank = True
     in_list = False
+    in_quote = False
     # The column an indented code block starts at: four past the text of the list item it's in, if any.
     code_indent = 4
 
@@ -161,7 +162,13 @@ def _blocks(text: str) -> list[tuple[bool, list[tuple[int, str]]]]:
         if not stripped or line == _FENCE:
             flush()
             after_blank = True
+            in_quote = False
             continue
+        quoted = stripped.startswith(">")
+        # A block quote's paragraph can go on without a ">" on each line, until a blank line or another kind of block.
+        if in_quote and not quoted and not _skipped(stripped) and not _LIST_ITEM_RE.match(stripped):
+            continue
+        in_quote = quoted
         indent = _indent(line)
         # Indented text after a blank line is a code block, unless it's a list item's own paragraph.
         if _skipped(stripped) or (after_blank and indent >= code_indent):

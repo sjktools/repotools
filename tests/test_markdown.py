@@ -271,6 +271,29 @@ def test_words_and_capitals_in_other_scripts_count() -> None:
     ]
 
 
+def test_a_block_quote_goes_on_without_its_marker() -> None:
+    assert _sentences("""\
+        The paragraph before is prose.
+        > A quote is not prose.
+        Nor is the line that carries it on.
+        > Nor is this one.
+        - A list item ends the quote.
+
+        > Another quote starts here.
+        # A heading ends it
+        This line is prose again.
+
+        > A last quote is here.
+
+        A blank line ends it too.
+        """) == [
+        (1, "The paragraph before is prose."),
+        (5, "A list item ends the quote."),
+        (9, "This line is prose again."),
+        (13, "A blank line ends it too."),
+    ]
+
+
 def test_a_line_of_markup_alone_is_nothing() -> None:
     assert prose_sentences("![logo](logo.png)\n\n") == []
     assert prose_sentences("") == []

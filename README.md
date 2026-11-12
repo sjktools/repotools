@@ -125,6 +125,7 @@ It also leaves out a sentence that ends in a colon, which leads into a list or a
 Treat the limits as ceilings and not as targets, and leave a sentence alone if the file already passes.
 
 The command skips code blocks, headings, tables, block quotes, comments and any line that starts with an HTML block tag.
+A block quote runs on to the next blank line, list item or heading.
 It counts inline code as one word.
 A bullet that isn't a full sentence isn't counted.
 

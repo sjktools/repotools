@@ -87,7 +87,8 @@ Once it merges, the `release` job in `ci.yml` tags `v<version>` and creates a Gi
 Only then does it publish the same files to PyPI, and check they install from PyPI.
 It publishes with PEP 740 attestations, through trusted publishing (no API token).
 
-Two comments act on an open PR from this repository, when the repository owner or an organization member posts just the command.
+Two comments act on an open PR from this repository, when the comment is just the command.
+The commenter's author association must be `OWNER` or `MEMBER`, so outside collaborators and contributors can't use them.
 `/testpypi` publishes a dev build of the PR's branch to TestPyPI only.
 `/autofix` runs `just fix` on the PR's branch and pushes the result (with the `AUTOFIX_TOKEN` secret).
 
