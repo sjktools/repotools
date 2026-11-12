@@ -197,3 +197,68 @@ def test_config_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: p
     monkeypatch.chdir(tmp_path)
     assert secrets.main(["check"]) == 1
     assert "must be a list of strings" in capsys.readouterr().err
+
+
+def _workflows(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, config_text: str, **files: str) -> int:
+    (tmp_path / "pyproject.toml").write_text(config_text)
+    directory = tmp_path / ".github" / "workflows"
+    directory.mkdir(parents=True)
+    for name, text in files.items():
+        (directory / name.replace("_", ".")).write_text(text)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    return secrets.main(["check-workflows"])
+
+
+WORKFLOW = """
+env:
+  A: ${{ secrets.CODECOV_TOKEN }}
+  B: ${{ secrets['autofix_token'] }}
+  C: ${{ secrets.GITHUB_TOKEN }}
+  # D: ${{ secrets.COMMENTED_OUT }}
+"""
+
+
+def test_check_workflows_passes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    other = 'env:\n  E: ${{ secrets[ "DEPENDABOT_FIX_TOKEN" ] }}\n  F: ${{ secrets.ORG_TOKEN }}\n'
+    config_text = CONFIG + 'other = ["ORG_TOKEN"]\n'
+    assert _workflows(tmp_path, monkeypatch, config_text, ci_yml=WORKFLOW, other_yaml=other) == 0
+    assert capsys.readouterr().out == "The workflows use exactly the 4 secret(s) pyproject.toml lists.\n"
+    # check doesn't look for the other secrets.
+    assert secrets.load_secrets(tmp_path) == {
+        "actions": ["CODECOV_TOKEN", "autofix_token"],
+        "dependabot": ["DEPENDABOT_FIX_TOKEN"],
+    }
+
+
+def test_check_workflows_reports_unlisted_and_unused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    extra = "env:\n  A: ${{ secrets.NEW_ONE }}\n"
+    assert _workflows(tmp_path, monkeypatch, CONFIG, ci_yml=WORKFLOW, a_yml=extra, b_yml=extra) == 1
+    assert capsys.readouterr().out == (
+        "NEW_ONE: used by a.yml, b.yml, but not listed in pyproject.toml\n"
+        "DEPENDABOT_FIX_TOKEN: listed in pyproject.toml, but no workflow uses it\n"
+        "1 secret(s) the workflows use aren't listed in pyproject.toml: add each to [tool.repoutils.secrets], "
+        "under actions or dependabot, or under other if it isn't a repository secret.\n"
+        "1 secret(s) pyproject.toml lists aren't used by any workflow: remove them from [tool.repoutils.secrets].\n"
+    )
+
+
+def test_check_workflows_needs_no_table_or_workflows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    assert secrets.main(["check-workflows"]) == 0
+    assert capsys.readouterr().out == "The workflows use exactly the 0 secret(s) pyproject.toml lists.\n"
+
+
+def test_other_alone_is_not_enough_for_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    gh = FakeGitHub([], [])
+    assert _run(tmp_path, monkeypatch, gh, ["check"], '[tool.repoutils.secrets]\nother = ["ORG_TOKEN"]\n') == 1
+    assert gh.calls == []
+    assert "No secrets are listed" in capsys.readouterr().err

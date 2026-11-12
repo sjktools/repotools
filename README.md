@@ -51,7 +51,7 @@ That installs only repoutils, hash-checked against `uv.lock`, and not the projec
 | `repo-settings` | Checks or changes the repository settings `pyproject.toml` gives, or prints the ones the repository has. |
 | `rulesets` | Checks, creates or updates the branch rulesets `pyproject.toml` defines, or prints the ones the repository has. |
 | `environments` | Checks, creates or updates the deployment environments `pyproject.toml` defines, or prints the ones the repository has. |
-| `secrets` | Checks the repository has the Actions and Dependabot secrets `pyproject.toml` names, or prints the names it has. |
+| `secrets` | Checks the repository has the Actions and Dependabot secrets `pyproject.toml` names, or prints the names it has. Also checks the workflows use exactly those secrets. |
 | `check-attestations` | Fails unless every distribution in `dist/` has a PEP 740 publish attestation. |
 
 The commands that post to a PR need a GitHub token, and so do `labels`, `repo-settings`, `rulesets`, `environments` and `secrets`.
@@ -129,6 +129,7 @@ required-status-checks = { required-status-checks = [{ context = "test", app = "
 [tool.repoutils.secrets]
 actions = ["CODECOV_TOKEN"]
 dependabot = ["DEPENDABOT_FIX_TOKEN"]
+other = ["ORG_DEPLOY_KEY"]
 
 # The deployment environments `repoutils environments` checks or creates; see below.
 [tool.repoutils.environments.pypi]
@@ -371,8 +372,9 @@ If you paste it in unchanged, `check --fail-on-unexpected` passes.
 `dependabot` lists its Dependabot secrets, the ones a workflow that Dependabot triggers can read.
 A list the table leaves out isn't checked.
 Names match regardless of case, as on GitHub.
-It covers only repository secrets, not environment or organization ones.
-Leave an organization secret out of the table, as `check` would report it missing.
+Those two cover only repository secrets.
+`other` lists the secrets workflows use that the repository doesn't hold, such as an organization's or an environment's.
+`check` and `dump` ignore `other`, and only `check-workflows` reads it.
 
 `repoutils secrets` only ever reads secrets' names.
 GitHub's API never returns a value, so there's no `ensure`.
@@ -391,6 +393,13 @@ GitHub Actions' `GITHUB_TOKEN` can't be given them.
 You can paste it into `pyproject.toml`.
 If you paste it in unchanged, `check --fail-on-unexpected` passes.
 `dump` neither reads nor changes `pyproject.toml`.
+
+`repoutils secrets check-workflows` needs no token, so it can run with a project's other checks.
+It reads every workflow in `.github/workflows` for the secrets it uses, as `secrets.NAME` or `secrets['NAME']`.
+It fails if a workflow uses a secret that none of the three lists names.
+It also fails if a list names a secret that no workflow uses.
+So the table can't fall behind the workflows.
+It skips `GITHUB_TOKEN`, which GitHub provides, and lines that are only a comment.
 
 ## Development
 

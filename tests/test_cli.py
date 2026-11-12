@@ -5,7 +5,6 @@ exit code) fails a test."""
 
 import io
 import json
-import re
 import subprocess
 import sys
 import urllib.request
@@ -112,7 +111,7 @@ def test_check_screenshots_dir(monkeypatch: pytest.MonkeyPatch, capsys: pytest.C
         (["check-attestations", "a", "b"], "[dist]"),
         (["labels"], "{check,ensure,dump}"),
         (["repo-settings"], "{check,ensure,dump}"),
-        (["secrets"], "{check,dump}"),
+        (["secrets"], "{check,dump,check-workflows}"),
         (["environments"], "{check,ensure,dump}"),
         (["rulesets"], "{check,ensure,dump}"),
     ],
@@ -163,17 +162,13 @@ def test_secrets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest
     assert "No secrets are listed" in capsys.readouterr().err
 
 
-def test_this_repos_secrets_match_its_workflows() -> None:
-    # pyproject.toml lists exactly the secrets the workflows use, as Actions or Dependabot secrets.
-    # Secret names ignore case, as on GitHub.
-    used = {
-        name.upper()
-        for path in (ROOT / ".github" / "workflows").glob("*.y*ml")
-        for name in re.findall(r"secrets(?:\.|\[\s*['\"])([A-Za-z_][A-Za-z0-9_]*)", path.read_text())
-    } - {"GITHUB_TOKEN"}
-    listed = load_secrets(ROOT)
-    assert listed["dependabot"] == ["DEPENDABOT_FIX_TOKEN"]
-    assert {name.upper() for name in listed["actions"] + listed["dependabot"]} == used
+def test_this_repos_secrets_match_its_workflows(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(ROOT)
+    assert cli.main(["secrets", "check-workflows"]) == 0
+    assert "The workflows use exactly the" in capsys.readouterr().out
+    assert load_secrets(ROOT)["dependabot"] == ["DEPENDABOT_FIX_TOKEN"]
 
 
 def test_environments(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:

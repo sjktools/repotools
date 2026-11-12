@@ -16,6 +16,12 @@ table doesn't name (an empty list then means there must be none).
 
 ``dump`` prints the names of every secret the repository has as the table,
 to paste into pyproject.toml (``check --fail-on-unexpected`` then passes).
+
+``check-workflows`` needs no token: it fails if a workflow in
+``.github/workflows`` uses a secret the table doesn't name, or the table names
+one that no workflow uses. ``other`` lists the secrets workflows use that
+aren't the repository's (an organization's or an environment's), which
+``check`` doesn't look for.
 Stdlib-only, like every repoutils command."""
 
 import argparse
@@ -36,6 +42,13 @@ PER_PAGE = 100
 # GitHub's rule for a secret's name: letters, digits and underscores, not
 # starting with a digit, nor with GITHUB_ (which it reserves).
 _NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+# The key in TABLE for secrets that workflows use but the repository doesn't hold.
+OTHER = "other"
+WORKFLOWS = Path(".github") / "workflows"
+# A workflow's use of a secret: secrets.NAME, secrets['NAME'] or secrets["NAME"].
+_USE_RE = re.compile(r"\bsecrets\s*(?:\.|\[\s*['\"])\s*([A-Za-z_][A-Za-z0-9_]*)")
+# The token GitHub gives every workflow run, which is no one's to set.
+_BUILT_IN = "GITHUB_TOKEN"
 
 
 @dataclass(frozen=True)
@@ -51,21 +64,21 @@ class Kind:
 KINDS = (Kind("actions", "actions/secrets", "Actions"), Kind("dependabot", "dependabot/secrets", "Dependabot"))
 
 
-def load_secrets(root: Path = Path()) -> dict[str, list[str]]:
-    """The secret names ``root/pyproject.toml`` lists, by kind, for each kind it lists;
-    raising config.ConfigError (a ValueError) if they're malformed."""
+def _load(root: Path) -> dict[str, list[str]]:
+    """Each list ``[tool.repoutils.secrets]`` in ``root/pyproject.toml`` gives, by its key."""
     table = config.section("secrets", root)
-    unknown = sorted(set(table) - {kind.key for kind in KINDS})
+    keys = [*(kind.key for kind in KINDS), OTHER]
+    unknown = sorted(set(table) - set(keys))
     if unknown:
         raise config.ConfigError(f"{TABLE} has unknown setting(s): {', '.join(unknown)}")
     result: dict[str, list[str]] = {}
-    for kind in KINDS:
-        if kind.key not in table:
+    for key in keys:
+        if key not in table:
             continue
-        names = config.string_list(table, kind.key, [], TABLE)
+        names = config.string_list(table, key, [], TABLE)
         seen: set[str] = set()
         for name in names:
-            where = f"{TABLE} {kind.key} {name!r}"
+            where = f"{TABLE} {key} {name!r}"
             if not _NAME_RE.fullmatch(name) or name.upper().startswith("GITHUB_"):
                 raise config.ConfigError(
                     f"{where} isn't a valid secret name: use letters, digits and underscores, "
@@ -74,8 +87,48 @@ def load_secrets(root: Path = Path()) -> dict[str, list[str]]:
             if name.upper() in seen:
                 raise config.ConfigError(f"{where} is listed twice (secret names ignore case)")
             seen.add(name.upper())
-        result[kind.key] = names
+        result[key] = names
     return result
+
+
+def load_secrets(root: Path = Path()) -> dict[str, list[str]]:
+    """The secret names ``root/pyproject.toml`` lists, by kind, for each kind it lists;
+    raising config.ConfigError (a ValueError) if they're malformed."""
+    return {key: names for key, names in _load(root).items() if key != OTHER}
+
+
+def workflow_secrets(root: Path = Path()) -> dict[str, list[str]]:
+    """The secrets the workflows in ``root/.github/workflows`` use, other than
+    GITHUB_TOKEN: each name in upper case, with the names of the files that use it.
+    Lines that are only a comment don't count."""
+    used: dict[str, list[str]] = {}
+    for path in sorted((root / WORKFLOWS).glob("*.y*ml")):
+        lines = [line for line in path.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")]
+        for name in sorted({match.upper() for match in _USE_RE.findall("\n".join(lines))} - {_BUILT_IN}):
+            used.setdefault(name, []).append(path.name)
+    return used
+
+
+def check_workflows(root: Path = Path()) -> int:
+    listed = {name.upper(): name for names in _load(root).values() for name in names}
+    used = workflow_secrets(root)
+    unlisted = sorted(set(used) - set(listed))
+    unused = sorted(listed[name] for name in set(listed) - set(used))
+    for name in unlisted:
+        print(f"{name}: used by {', '.join(used[name])}, but not listed in pyproject.toml")
+    for name in unused:
+        print(f"{name}: listed in pyproject.toml, but no workflow uses it")
+    if unlisted:
+        print(
+            f"{len(unlisted)} secret(s) the workflows use aren't listed in pyproject.toml: add each to {TABLE}, "
+            f"under actions or dependabot, or under {OTHER} if it isn't a repository secret."
+        )
+    if unused:
+        print(f"{len(unused)} secret(s) pyproject.toml lists aren't used by any workflow: remove them from {TABLE}.")
+    if unlisted or unused:
+        return 1
+    print(f"The workflows use exactly the {len(listed)} secret(s) pyproject.toml lists.")
+    return 0
 
 
 def repo_secrets(repo: str, token: str, kind: Kind) -> list[str]:
@@ -157,7 +210,7 @@ def main(argv: list[str]) -> int:
         "it needs the Secrets and Dependabot secrets read permissions. "
         "Only repository secrets count, not organization or environment ones.",
     )
-    subparsers = parser.add_subparsers(dest="mode", required=True, metavar="{check,dump}")
+    subparsers = parser.add_subparsers(dest="mode", required=True, metavar="{check,dump,check-workflows}")
     check_parser = subparsers.add_parser(
         "check",
         help="fail if a secret pyproject.toml lists is missing",
@@ -167,6 +220,12 @@ def main(argv: list[str]) -> int:
         "dump",
         help="print the repository's secret names as pyproject.toml settings",
         description=f"Print the name of every secret the repository has as {TABLE}, to paste into pyproject.toml.",
+    )
+    subparsers.add_parser(
+        "check-workflows",
+        help="fail if the workflows' secrets and pyproject.toml's differ (needs no token)",
+        description="Fail if a workflow in .github/workflows uses a secret pyproject.toml doesn't list, "
+        "or pyproject.toml lists one no workflow uses. Needs no token.",
     )
     for sub in (check_parser, dump_parser):
         sub.add_argument(
@@ -187,6 +246,8 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
 
     try:
+        if args.mode == "check-workflows":
+            return check_workflows()
         # dump doesn't read pyproject.toml, so it works before there are any secrets there.
         wanted = {} if args.mode == "dump" else load_secrets()
         if not wanted and args.mode != "dump":

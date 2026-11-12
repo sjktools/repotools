@@ -98,7 +98,7 @@ The commenter's author association must be `OWNER` or `MEMBER`, so outside colla
 `claude.yml` and `claude-code-review.yml` run Claude Code when a comment starts with `@claude` (with the `CLAUDE_CODE_OAUTH_TOKEN` secret).
 Their `route` jobs run `repoutils claude-route` from a sparse checkout of `src/repoutils/` with the runner's `python3`, installing nothing.
 `[tool.repoutils.secrets]` in `pyproject.toml` lists the secrets these workflows use, which `repoutils secrets check` confirms the repository has.
-Update it when a workflow starts or stops using one.
+Update it when a workflow starts or stops using one, as `just secrets-workflows-check` fails if the two differ.
 
 ## Issue labels
 
