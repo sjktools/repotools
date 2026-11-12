@@ -214,7 +214,7 @@ def test_a_line_that_starts_with_an_inline_tag_is_prose() -> None:
         (1, "Ctrl and C stop the tool."),
         (2, "Bold words start this one."),
         (3, "Today is the day."),
-        (4, "is the site to see."),
+        (4, "URL is the site to see."),
     ]
 
 
@@ -291,6 +291,32 @@ def test_a_block_quote_goes_on_without_its_marker() -> None:
         (5, "A list item ends the quote."),
         (9, "This line is prose again."),
         (13, "A blank line ends it too."),
+    ]
+
+
+def test_angle_brackets_that_are_not_a_tag_keep_their_words() -> None:
+    assert _sentences("It holds when a < b and c > d, or when 1 <2 and 3> 4.\n") == [
+        (1, "It holds when a < b and c > d, or when 1 <2 and 3> 4."),
+    ]
+
+
+def test_only_a_bullet_or_a_one_starts_a_list_inside_a_paragraph() -> None:
+    assert _sentences("""\
+        The tool was written in the year
+        2024. Then it grew, and the list came after
+        1. The first item is here.
+        2. The second item is here.
+
+        A paragraph can be cut short
+        - by a bullet like this.
+
+        > A quote runs on to the line
+        3) that starts with a number.
+        """) == [
+        (1, "The tool was written in the year 2024."),
+        (3, "The first item is here."),
+        (4, "The second item is here."),
+        (7, "by a bullet like this."),
     ]
 
 

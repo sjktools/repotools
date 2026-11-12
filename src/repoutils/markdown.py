@@ -20,7 +20,8 @@ _WRAPPED_CODE_RE = re.compile(INLINE_CODE_RE.pattern, re.DOTALL)
 # runs over it, and it ends a paragraph.
 _FENCE = "\0"
 _COMMENT_RE = re.compile(r"<!--[^\0]*?-->")
-_LIST_ITEM_RE = re.compile(r"(?:[-*+]|\d+[.)])\s+(.*)")
+# A list item: its number, if it has one, and its text.
+_LIST_ITEM_RE = re.compile(r"(?:[-*+]|(\d+)[.)])\s+(.*)")
 _RULE_RE = re.compile(r"[-*_=\s]{3,}")
 _HTML_RE = re.compile(r"</?([a-zA-Z][a-zA-Z0-9-]*)(?=[\s/>]|$)")
 # Tags that mark up words inside a sentence; a line that starts with any other tag is an HTML block.
@@ -31,7 +32,9 @@ _INLINE_TAGS = frozenset(
 _LINK_DEFINITION_RE = re.compile(r"\[[^\]]+\]:\s")
 _IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
 _LINK_RE = re.compile(r"\[([^\]]*)\](?:\([^)]*\)|\[[^\]]*\])")
-_TAG_RE = re.compile(r"<[^>]+>")
+_AUTOLINK_RE = re.compile(r"<https?://[^>\s]+>")
+# A tag starts with a letter, so that "a < b and c > d" keeps its words.
+_TAG_RE = re.compile(r"</?[a-zA-Z][^>]*>")
 # A bare URL, without the punctuation that closes its sentence or its brackets.
 _URL_RE = re.compile(r"https?://\S+?(?=[.,!?;:)\]\"']*(?:\s|$))")
 _EMPHASIS_RE = re.compile(r"(\*\*|__|\*|_)(\S.*?\S|\S)\1")
@@ -90,6 +93,7 @@ def words(text: str) -> list[str]:
 def _clean(line: str) -> str:
     line = _IMAGE_RE.sub("", line)
     line = _LINK_RE.sub(r"\1", line)
+    line = _AUTOLINK_RE.sub("URL", line)
     line = _TAG_RE.sub("", line)
     line = _URL_RE.sub("URL", line)
     line = _EMPHASIS_RE.sub(r"\2", line)
@@ -105,6 +109,15 @@ def _skipped(stripped: str) -> bool:
         or (tag and tag[1].lower() not in _INLINE_TAGS)
         or _LINK_DEFINITION_RE.match(stripped)
     )
+
+
+def _list_item(stripped: str, *, in_paragraph: bool) -> re.Match[str] | None:
+    """The line's match as the start of a list item, if it is one."""
+    item = _LIST_ITEM_RE.match(stripped)
+    # Only a bullet or "1." starts a list in the middle of a paragraph, so a wrapped "2024. Then" doesn't.
+    if item and in_paragraph and item[1] not in (None, "1"):
+        return None
+    return item
 
 
 def _prose_lines(text: str) -> Iterator[tuple[int, str]]:
@@ -166,7 +179,7 @@ def _blocks(text: str) -> list[tuple[bool, list[tuple[int, str]]]]:
             continue
         quoted = stripped.startswith(">")
         # A block quote's paragraph can go on without a ">" on each line, until a blank line or another kind of block.
-        if in_quote and not quoted and not _skipped(stripped) and not _LIST_ITEM_RE.match(stripped):
+        if in_quote and not quoted and not _skipped(stripped) and not _list_item(stripped, in_paragraph=True):
             continue
         in_quote = quoted
         indent = _indent(line)
@@ -176,12 +189,12 @@ def _blocks(text: str) -> list[tuple[bool, list[tuple[int, str]]]]:
             after_blank = indent >= code_indent
             continue
         after_blank = False
-        item = _LIST_ITEM_RE.match(stripped)
+        item = _list_item(stripped, in_paragraph=bool(block) and not block_in_list)
         if item:
             flush()
             in_list = True
-            code_indent = indent + len(stripped) - len(item[1]) + 4
-            stripped = item[1]
+            code_indent = indent + len(stripped) - len(item[2]) + 4
+            stripped = item[2]
         elif not block and not indent:
             # A paragraph that isn't indented at all ends the list; a "- " item's own paragraphs have two spaces.
             in_list = False

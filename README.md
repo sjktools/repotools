@@ -126,7 +126,7 @@ Treat the limits as ceilings and not as targets, and leave a sentence alone if t
 
 The command skips code blocks, headings, tables, block quotes, comments and any line that starts with an HTML block tag.
 A block quote runs on to the next blank line, list item or heading.
-It counts inline code as one word.
+It counts inline code as one word, and a URL as one word.
 Text with no closing punctuation, or with fewer than three words, isn't counted, such as a terse bullet.
 
 It reads sentences as English punctuates them.
