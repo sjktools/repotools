@@ -115,7 +115,7 @@ def _list_item(stripped: str, *, in_paragraph: bool) -> re.Match[str] | None:
     """The line's match as the start of a list item, if it is one."""
     item = _LIST_ITEM_RE.match(stripped)
     # Only a bullet or "1." starts a list in the middle of a paragraph, so a wrapped "2024. Then" doesn't.
-    if item and in_paragraph and item[1] not in (None, "1"):
+    if item and in_paragraph and item[1] is not None and int(item[1]) != 1:
         return None
     return item
 

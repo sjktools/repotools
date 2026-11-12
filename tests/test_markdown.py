@@ -307,6 +307,9 @@ def test_only_a_bullet_or_a_one_starts_a_list_inside_a_paragraph() -> None:
         1. The first item is here.
         2. The second item is here.
 
+        A one can have zeros before it, as in
+        01. The padded item is here.
+
         A paragraph can be cut short
         - by a bullet like this.
 
@@ -316,7 +319,8 @@ def test_only_a_bullet_or_a_one_starts_a_list_inside_a_paragraph() -> None:
         (1, "The tool was written in the year 2024."),
         (3, "The first item is here."),
         (4, "The second item is here."),
-        (7, "by a bullet like this."),
+        (7, "The padded item is here."),
+        (10, "by a bullet like this."),
     ]
 
 
