@@ -3,7 +3,7 @@
 repoutils is a set of repository checks and CI helpers for Python projects that use uv, just and GitHub Actions.
 You run it as `repoutils <command>`.
 
-The checks used to live in the `scripts/` directories of [taxtracker](https://github.com/skissane/taxtracker) and [exolot](https://github.com/skissane/exolot).
+Those checks and helpers used to live in the `scripts/` directories of [taxtracker](https://github.com/skissane/taxtracker) and [exolot](https://github.com/skissane/exolot).
 They were pulled together here so that each project can depend on one package instead of keeping its own copies.
 
 repoutils has no dependencies, and needs only the Python standard library (3.12 or later).
@@ -137,7 +137,7 @@ If you paste them in unchanged, `check --strict` passes.
 ### Repository settings
 
 `[tool.repoutils.repo-settings]` covers the settings on a repository's General settings page that most projects want to keep the same, mainly the ones in its Features and Pull Requests sections.
-All of them are optional, but the command fails if the table doesn't set any.
+All of them are optional, but `check` and `ensure` fail if the table doesn't set any.
 A setting the table leaves out stays as it is on GitHub.
 
 | Setting | Values | On GitHub |
@@ -155,8 +155,8 @@ A setting the table leaves out stays as it is on GitHub.
 | `delete-branch-on-merge` | `true` or `false` | Automatically delete head branches. |
 | `require-web-commit-signoff` | `true` or `false` | Require contributors to sign off on web-based commits. |
 
-GitHub takes a commit message together with its title.
-So if you set only `squash-merge.message` (or `merge-commit.message`), the title stays as GitHub has it.
+GitHub only accepts a commit message along with its title.
+So when you set only `squash-merge.message` (or `merge-commit.message`), repoutils sends the title GitHub already has.
 GitHub refuses some pairs of title and message, and `ensure` reports that as an HTTP 422 error.
 
 Some things are left out on purpose.
@@ -169,7 +169,7 @@ That can happen because GitHub ignores some changes rather than refusing them, s
 `repoutils repo-settings check` changes nothing, and fails in exactly the cases where `ensure` would change something.
 `--exit-zero` works the same way as it does for `labels check`.
 
-`ensure` needs a token that can administer the repository: a fine-grained token with the Administration write permission.
+`ensure` needs a token that can administer the repository, such as a fine-grained token with the Administration write permission.
 The `GITHUB_TOKEN` that GitHub Actions provides can't be given that permission.
 
 `repoutils repo-settings dump` prints every setting in the table above with the value the repository has for it.
