@@ -417,8 +417,8 @@ def _differences(label: str, theirs: Any, ours: Any) -> list[str]:
         return []
     if isinstance(theirs, list) and isinstance(ours, list):
         missing, extra = [v for v in ours if v not in theirs], [v for v in theirs if v not in ours]
-        changes = [f"{label}: GitHub lacks {', '.join(map(_toml, missing))}"] if missing else []
-        return changes + ([f"{label}: GitHub also has {', '.join(map(_toml, extra))}"] if extra else [])
+        changes = [f"{label}: GitHub lacks:", *(f"  {_toml(v)}" for v in missing)] if missing else []
+        return changes + ([f"{label}: GitHub also has:", *(f"  {_toml(v)}" for v in extra)] if extra else [])
     return [f"{label} is {_toml(theirs)} on GitHub, not {_toml(ours)}"]
 
 
