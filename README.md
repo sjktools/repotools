@@ -372,6 +372,7 @@ If you paste it in unchanged, `check --fail-on-unexpected` passes.
 A list the table leaves out isn't checked.
 Names match regardless of case, as on GitHub.
 It covers only repository secrets, not environment or organization ones.
+Leave an organization secret out of the table, as `check` would report it missing.
 
 `repoutils secrets` only ever reads secrets' names.
 GitHub's API never returns a value, so there's no `ensure`.

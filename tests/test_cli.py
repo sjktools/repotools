@@ -168,8 +168,8 @@ def test_this_repos_secrets_match_its_workflows() -> None:
     # Secret names ignore case, as on GitHub.
     used = {
         name.upper()
-        for path in (ROOT / ".github" / "workflows").glob("*.yml")
-        for name in re.findall(r"secrets\.([A-Za-z_][A-Za-z0-9_]*)", path.read_text())
+        for path in (ROOT / ".github" / "workflows").glob("*.y*ml")
+        for name in re.findall(r"secrets(?:\.|\[\s*['\"])([A-Za-z_][A-Za-z0-9_]*)", path.read_text())
     } - {"GITHUB_TOKEN"}
     listed = load_secrets(ROOT)
     assert listed["dependabot"] == ["DEPENDABOT_FIX_TOKEN"]

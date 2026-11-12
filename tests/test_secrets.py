@@ -1,3 +1,4 @@
+import re
 import subprocess
 import tomllib
 import urllib.error
@@ -101,7 +102,10 @@ def test_omitted_kind_is_not_checked(
     config_text = '[tool.repoutils.secrets]\nactions = ["A"]\n'
     assert _run(tmp_path, monkeypatch, gh, ["check", "--fail-on-unexpected"], config_text) == 0
     assert [url for _, url in gh.calls] == [f"{github.API_URL}/repos/o/r/actions/secrets?per_page=100&page=1"]
-    assert capsys.readouterr().out == "All 1 secret(s) pyproject.toml lists exist in o/r.\n"
+    assert (
+        capsys.readouterr().out
+        == "All 1 secret(s) pyproject.toml lists exist in o/r, and it has no others of those kinds.\n"
+    )
 
 
 def test_empty_list_means_none_with_fail_on_unexpected(
@@ -129,6 +133,10 @@ def test_dump_round_trips(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsy
     assert out == '[tool.repoutils.secrets]\nactions = [\n    "ALPHA",\n    "ZED",\n]\ndependabot = []\n'
     assert tomllib.loads(out)["tool"]["repoutils"]["secrets"] == {"actions": ["ALPHA", "ZED"], "dependabot": []}
     assert _run(tmp_path, monkeypatch, gh, ["check", "--fail-on-unexpected"], out) == 0
+    assert (
+        capsys.readouterr().out
+        == "All 2 secret(s) pyproject.toml lists exist in o/r, and it has no others of those kinds.\n"
+    )
 
 
 def test_no_secrets_listed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -152,7 +160,7 @@ def test_no_secrets_listed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caps
 )
 def test_load_secrets_errors(tmp_path: Path, config_text: str, error: str) -> None:
     (tmp_path / "pyproject.toml").write_text(config_text)
-    with pytest.raises(config.ConfigError, match=error.replace("[", r"\[").replace("(", r"\(").replace(")", r"\)")):
+    with pytest.raises(config.ConfigError, match=re.escape(error)):
         secrets.load_secrets(tmp_path)
 
 

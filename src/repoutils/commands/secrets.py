@@ -142,7 +142,10 @@ def check(repo: str, token: str, wanted: dict[str, list[str]], *, exit_zero: boo
         )
     if missing_count or unexpected_count:
         return 0 if exit_zero else 1
-    print(f"All {total} secret(s) pyproject.toml lists exist in {repo}.")
+    print(
+        f"All {total} secret(s) pyproject.toml lists exist in {repo}"
+        + (", and it has no others of those kinds." if fail_on_unexpected else ".")
+    )
     return 0
 
 
@@ -151,7 +154,8 @@ def main(argv: list[str]) -> int:
         prog="repoutils secrets",
         description=__doc__.split("\n\n")[0].replace("\n", " "),
         epilog="Reads secret names (never values) with $GITHUB_TOKEN, defaulting to `gh auth token`; "
-        "it needs the Secrets and Dependabot secrets read permissions.",
+        "it needs the Secrets and Dependabot secrets read permissions. "
+        "Only repository secrets count, not organization or environment ones.",
     )
     subparsers = parser.add_subparsers(dest="mode", required=True, metavar="{check,dump}")
     check_parser = subparsers.add_parser(
