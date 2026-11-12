@@ -1,15 +1,17 @@
 # repoutils
 
-Repository tooling for Python projects that use uv, just and GitHub Actions, run as `repoutils <command>`.
+repoutils is a set of repository checks and CI helpers for Python projects that use uv, just and GitHub Actions.
+You run it as `repoutils <command>`.
 
-It collects the checks and CI helpers that used to live in the `scripts/` directories of [taxtracker](https://github.com/skissane/taxtracker) and [exolot](https://github.com/skissane/exolot), so each project can depend on one package instead of keeping its own copies.
+I used to keep these checks and helpers in the `scripts/` directories of several personal projects, such as [exolot](https://github.com/skissane/exolot).
+I pulled them together here so that each project can depend on one package instead of keeping its own copies.
 
-repoutils needs only the Python standard library (3.12 or later), and has no dependencies.
-That's deliberate: projects run it in CI jobs that hold write-capable tokens or check out untrusted Dependabot branches, where nothing else should be installed.
+repoutils has no dependencies, and needs only the Python standard library (3.12 or later).
+It should stay that way, because projects run it in CI jobs that hold write-capable tokens or check out untrusted Dependabot branches, and nothing else should be installed in those jobs.
 
 ## Installing
 
-Add it to its own dependency group, and include that group in `dev`:
+Give repoutils its own dependency group, and include that group in `dev`:
 
 ```toml
 [dependency-groups]
@@ -18,16 +20,18 @@ dev = [{ include-group = "repoutils" }, "pytest>=9"]
 ```
 
 Then run a command with `uv run repoutils <command>`.
-In a job with a write-capable token, use `uv run --only-group repoutils repoutils <command>`, which installs only repoutils (hash-checked against `uv.lock`) and not the project or its other dependencies.
+In a job with a write-capable token, use `uv run --only-group repoutils repoutils <command>` instead.
+That installs only repoutils, hash-checked against `uv.lock`, and not the project or its other dependencies.
 
 ## Commands
 
-Run `repoutils --help` for the list, and `repoutils <command> --help` for a command's options.
+`repoutils --help` lists the commands, and `repoutils <command> --help` shows a command's options.
 
 | Command | What it does |
 | --- | --- |
 | `check-whitespace` | Fails on trailing whitespace, a leading blank line or a missing or extra final newline in any Git-tracked text file. |
 | `check-sentence-per-line` | Fails if a configured Markdown file (by default `AGENTS.md` and `README.md`) has two sentences on one line. |
+| `check-prose` | Fails if a configured Markdown file's prose has long, clause-heavy sentences, or too many short ones. |
 | `check-blame-ignore-revs` | Fails unless `.git-blame-ignore-revs` lists only full hashes of commits that are ancestors of a target. |
 | `check-screenshots-dir` | Fails unless the screenshots directory's `.gitignore` is the only file tracked there, and still ignores everything else. |
 | `git-config-setup` | Sets the repo's local `blame.ignoreRevsFile`; idempotent, for a justfile to run on every recipe. |
@@ -43,33 +47,40 @@ Run `repoutils --help` for the list, and `repoutils <command> --help` for a comm
 | `wait-for-base-coverage` | Waits for Codecov to have a PR base commit's coverage, so the PR's comparison works. |
 | `post-screenshots` | Uploads a directory of PNGs and posts them to a PR as a comment. |
 | `recreate-pr` | Recreates a PR as a draft from the same branch and closes the original. |
-| `labels` | `labels check` fails if the repository lacks a label `pyproject.toml` defines; `labels ensure` creates it; `labels dump` prints the repository's labels to paste in. |
-| `repo-settings` | `repo-settings check` fails if a repository setting differs from `pyproject.toml`; `repo-settings ensure` changes it; `repo-settings dump` prints the repository's settings to paste in. |
-| `rulesets` | `rulesets check` fails if the repository lacks a branch ruleset `pyproject.toml` defines, or one differs; `rulesets ensure` creates or replaces it; `rulesets dump` prints the repository's branch rulesets to paste in. |
+| `labels` | Checks or creates the labels `pyproject.toml` defines, or prints the ones the repository has. |
+| `repo-settings` | Checks or changes the repository settings `pyproject.toml` gives, or prints the ones the repository has. |
+| `rulesets` | Checks, creates or updates the branch rulesets `pyproject.toml` defines, or prints the ones the repository has. |
 | `check-attestations` | Fails unless every distribution in `dist/` has a PEP 740 publish attestation. |
 
-The commands that post to a PR read `$GITHUB_TOKEN`, falling back to `gh auth token`, as do `labels`, `repo-settings` and `rulesets`.
+The commands that post to a PR need a GitHub token, and so do `labels`, `repo-settings` and `rulesets`.
+They read `$GITHUB_TOKEN`, and fall back to `gh auth token`.
 
 ## Configuration
 
-Every setting is optional, and lives in the project's `pyproject.toml`:
+Settings go in the project's `pyproject.toml`, and all of them are optional:
 
 ```toml
 [tool.repoutils]
-# Prefix of the hidden markers that find this project's PR comments,
+# Prefix of the hidden markers used to find this project's PR comments,
 # e.g. <!-- repoutils-patch-coverage -->.
 comment-prefix = "repoutils"
-# Compared with when there's no PR base.
+# The branch to compare with when there's no PR base.
 default-branch = "main"
 
 [tool.repoutils.sentence-per-line]
 files = ["AGENTS.md", "README.md"]
 
+# The limits `repoutils check-prose` holds these files to; see below.
+[tool.repoutils.prose]
+files = ["AGENTS.md", "README.md"]
+max-words-per-sentence = 18
+
 [tool.repoutils.screenshots]
 dir = "screenshots"
 
 [tool.repoutils.lock-platforms]
-# "os" allows any arch; "os:arch" one ("*" for any). "linux" matches manylinux and musllinux.
+# "os" allows any arch, and "os:arch" allows one arch ("*" for any).
+# "linux" matches manylinux and musllinux.
 supported = ["any", "linux:x86_64", "linux:aarch64", "macosx"]
 tolerated = ["ios", "pyemscripten"]
 
@@ -80,7 +91,7 @@ limit = 500
 limits = { "tests/*" = 700 }
 policy = "Split a long file only where that makes the code better."
 
-# The labels `repoutils labels` checks or creates: color and description are optional.
+# The labels that `repoutils labels` checks or creates; color and description are optional.
 [[tool.repoutils.labels]]
 name = "bug"
 color = "d73a4a"
@@ -89,7 +100,7 @@ description = "Something isn't working"
 [[tool.repoutils.labels]]
 name = "dependencies"
 
-# The repository settings `repoutils repo-settings` checks or changes; see below.
+# The repository settings that `repoutils repo-settings` checks or changes (see below).
 [tool.repoutils.repo-settings]
 description = "Repository tooling for Python projects"
 homepage = "https://pypi.org/project/repoutils/"
@@ -113,26 +124,84 @@ pull-request = { allowed-merge-methods = ["squash"] }
 required-status-checks = { required-status-checks = [{ context = "test", app = "github-actions" }] }
 ```
 
+### Prose
+
+`repoutils check-prose` measures the prose in each configured Markdown file, and fails a file whose sentences are, on the whole, long and full of joined clauses.
+That style is common in machine-written documents, and it's tiring to read.
+
+The opposite fault fails too.
+Prose that has been cut up only to get under the limits ends up as a run of very short sentences, which reads no better.
+So one limit caps how many of those a file can have.
+That limit leaves out list items, where a terse sentence is at home.
+It also leaves out a sentence that ends in a colon, which leads into a list or a code block.
+Treat the limits as ceilings and not as targets, and leave a sentence alone if the file already passes.
+
+The command skips code blocks, headings, tables, block quotes, comments and any line that starts with an HTML block tag.
+A block quote runs on to the next blank line, list item or heading.
+It counts inline code as one word, and a URL as one word.
+Text with no closing punctuation, or with fewer than three words, isn't counted, such as a terse bullet.
+
+It reads sentences as English punctuates them.
+A sentence ends at a full stop, a question mark or an exclamation mark, and the next one starts with a capital, a digit or inline code.
+A colon ends one too, at the end of a paragraph or a list item.
+A new line after one of those marks starts a sentence too, whatever its first word is.
+So in a wrapped paragraph, a sentence that starts mid-line with a lowercase word, such as "uv", is read as part of the one before it.
+
+| Setting | Default | What it limits |
+|---|---|---|
+| `max-words-per-sentence` | 18 | The mean number of words in a sentence. |
+| `max-long-sentences` | 12 | The percentage of sentences with more than `long-sentence-words` words (default 30). |
+| `max-short-sentences` | 25 | The percentage of sentences with fewer than `short-sentence-words` words (default 8), list items and lead-ins aside. |
+| `max-commas-per-sentence` | 1.3 | The mean number of commas in a sentence. |
+| `max-semicolons-per-sentence` | 0.05 | The mean number of semicolons in a sentence. |
+| `max-joints-per-sentence` | 0.6 | The mean number of clause joints in a sentence. |
+
+A clause joint is a semicolon, a colon, a dash or a comma before a word such as "and", "but", "because" or "which".
+Set a limit to `false` to turn it off.
+A file with fewer than `min-sentences` sentences (default 15) is too short to judge, and passes.
+`min-sentences`, `long-sentence-words` and `short-sentence-words` are whole numbers.
+
+The limits apply to a whole file's rates and not to each sentence, so a file with a few long sentences can still pass.
+Under each limit that a file is over, the command lists the five sentences that add most to it.
+The two limits on long sentences share one list, under the first of them that the file is over.
+`--stats` prints every rate for every file, and `--exit-zero` reports the same but exits 0.
+
+The defaults for long sentences come from comparing READMEs written before language models with recent machine-written documents.
+That sample was small (17 documents), and the short-sentence limit rests on less still (a few rewrites of this README), so adjust the limits to suit your project.
+
 ### Labels
 
-`repoutils labels ensure` creates each missing label (grey, if `pyproject.toml` gives it no color), and fills in a description that's empty on GitHub with the one `pyproject.toml` gives.
-It leaves a name whose case differs, a different color or a different non-empty description as it is, and reports it, unless you pass `--strict`, which changes them to match.
-It never changes or deletes a label `pyproject.toml` doesn't define.
-If a request fails part way, the labels before it are already changed, and running `ensure` again finishes the job.
+`repoutils labels ensure` creates each label the repository lacks, grey if `pyproject.toml` gives it no color.
+Where a label's description is empty on GitHub, `ensure` fills it in with the one from `pyproject.toml`.
 
-`repoutils labels check` changes nothing, and fails exactly when `ensure`, with the same `--strict`, would change something; it reports the differences `ensure` would leave alone without failing.
-With `--fail-on-unexpected` it also fails on, and lists, the labels the repository has that `pyproject.toml` doesn't define (matching names regardless of case), so `pyproject.toml` can be the complete list; `ensure` still leaves those labels alone, so delete them on GitHub or add them to `pyproject.toml`.
-With `--exit-zero` it reports the same, but exits 0 unless it couldn't check (for example on a bad token), which `|| true` would hide.
+Other differences are reported but left alone: a name in a different case, a different color, or a different description that isn't empty.
+Pass `--strict` to have those changed to match as well.
+`ensure` never changes or deletes a label `pyproject.toml` doesn't define.
+If a request fails part way through, the labels before it have already been changed, so run `ensure` again to finish the job.
 
-In GitHub Actions, `ensure` needs `issues: write` permission, and `check` needs `issues: read` on a private repository.
+`repoutils labels check` changes nothing.
+It fails in exactly the cases where `ensure`, given the same `--strict`, would change something.
+The differences `ensure` would leave alone are reported too, but they don't make it fail.
 
-`repoutils labels dump` prints every label the repository has as `[[tool.repoutils.labels]]` entries, with its name, color and any description, for you to paste into `pyproject.toml` and edit; pasted unchanged, `check --strict` passes.
-It doesn't read `pyproject.toml` or change it.
+With `--fail-on-unexpected`, `check` also lists the labels the repository has but `pyproject.toml` doesn't define (matching names regardless of case), and fails if there are any.
+Use it when you want `pyproject.toml` to be the complete list of labels.
+`ensure` still leaves those labels alone, so you have to delete them on GitHub or add them to `pyproject.toml`.
+
+With `--exit-zero`, `check` reports the same things but exits 0, unless it couldn't do the check at all (because of a bad token, for example).
+That's the difference from `|| true`, which would hide that kind of failure as well.
+
+In GitHub Actions, `ensure` needs the `issues: write` permission, and `check` needs `issues: read` if the repository is private.
+
+`repoutils labels dump` prints every label the repository has as `[[tool.repoutils.labels]]` entries, each with its name, its color and its description if it has one.
+You can paste them into `pyproject.toml` and edit them from there.
+If you paste them in unchanged, `check --strict` passes.
+`dump` neither reads nor changes `pyproject.toml`.
 
 ### Repository settings
 
-`[tool.repoutils.repo-settings]` covers the settings on a repository's General settings page that most projects want to keep the same, mainly its Features and Pull Requests sections.
-Every one is optional, though the command fails if the table sets none, and `repoutils repo-settings` leaves a setting the table leaves out as it is on GitHub.
+`[tool.repoutils.repo-settings]` covers the settings on a repository's General settings page that most projects want to keep the same, mainly the ones in its Features and Pull Requests sections.
+All of them are optional, but `check` and `ensure` fail if the table doesn't set any.
+A setting the table leaves out stays as it is on GitHub.
 
 | Setting | Values | On GitHub |
 |---|---|---|
@@ -149,48 +218,87 @@ Every one is optional, though the command fails if the table sets none, and `rep
 | `delete-branch-on-merge` | `true` or `false` | Automatically delete head branches. |
 | `require-web-commit-signoff` | `true` or `false` | Require contributors to sign off on web-based commits. |
 
-A commit message is sent with its title, so setting only `squash-merge.message` (or `merge-commit.message`) keeps the title GitHub has; GitHub refuses some title and message pairs, which `ensure` reports as an HTTP 422 error.
+GitHub only accepts a commit message along with its title.
+So when you set only `squash-merge.message` (or `merge-commit.message`), repoutils sends the title GitHub already has.
+GitHub refuses some pairs of title and message, and `ensure` reports that as an HTTP 422 error.
 
-It deliberately can't rename, transfer or archive the repository, change its default branch or visibility, or make it a template, and rejects a table that tries.
+Some things are left out on purpose.
+`repo-settings` can't rename, transfer or archive the repository, change its default branch or visibility, or make it a template, and it rejects a table that tries to.
 
-`repoutils repo-settings ensure` changes every setting that differs, in one request, and fails if GitHub doesn't apply one (it ignores some changes, such as one an organization's policy forbids, rather than refusing them).
-`repoutils repo-settings check` changes nothing, and fails exactly when `ensure` would change something; `--exit-zero` works as it does for `labels check`.
+`repoutils repo-settings ensure` changes every setting that differs, all in one request.
+It fails if GitHub doesn't apply one of them.
+That can happen because GitHub ignores some changes rather than refusing them, such as a change an organization's policy forbids.
 
-`ensure` needs a token that can administer the repository (a fine-grained token with Administration write permission), which GitHub Actions' `GITHUB_TOKEN` can't be given.
+`repoutils repo-settings check` changes nothing, and fails in exactly the cases where `ensure` would change something.
+`--exit-zero` works the same way as it does for `labels check`.
 
-`repoutils repo-settings dump` prints every setting above as the repository has it, as `[tool.repoutils.repo-settings]` with a sub-table for each merge method, for you to paste into `pyproject.toml` and trim to the settings you want to keep the same; pasted unchanged, `check` passes.
-It doesn't read `pyproject.toml` or change it.
-If GitHub doesn't return a setting, or returns a value the table can't give, `dump` leaves it out and says so on stderr.
+`ensure` needs a token that can administer the repository, such as a fine-grained token with the Administration write permission.
+The `GITHUB_TOKEN` that GitHub Actions provides can't be given that permission.
+
+`repoutils repo-settings dump` prints every setting in the table above with the value the repository has for it.
+The output is a `[tool.repoutils.repo-settings]` table with a sub-table for each merge method.
+Paste it into `pyproject.toml` and trim it down to the settings you want to keep the same.
+If you paste it in unchanged, `check` passes.
+`dump` neither reads nor changes `pyproject.toml`.
+If GitHub doesn't return a setting, or returns a value the table can't express, `dump` leaves it out and says so on stderr.
 
 ### Rulesets
 
-Each `[tool.repoutils.rulesets.<name>]` table is one of the repository's branch rulesets (Settings, Rules, Rulesets), and gives only what isn't a new ruleset's default.
-Anything it leaves out is off or empty, so the table is the whole ruleset, and `ensure` turns off a rule the table leaves out.
-Tag rulesets, push rulesets, rulesets the repository inherits from its organization and legacy branch protection rules are all left alone.
+Each `[tool.repoutils.rulesets.<name>]` table is one of the repository's branch rulesets (Settings, Rules, Rulesets).
+It gives only what isn't a new ruleset's default.
+Anything it leaves out is off or empty, so the table is the whole ruleset.
+`ensure` turns off any rule the table leaves out.
+
+Tag rulesets and push rulesets are left alone.
+So are rulesets the repository inherits from its organization, and legacy branch protection rules.
 
 | Setting | Values | On GitHub |
 |---|---|---|
 | `enforcement` | `"active"` (the default), `"evaluate"` or `"disabled"` | Whether the ruleset is enforced. |
-| `include`, `exclude` | branch name patterns, such as `["main", "release/*"]`, or `"~DEFAULT_BRANCH"` or `"~ALL"` | The branches it targets; `refs/heads/` is optional, and `include` is required, as a ruleset that targets no branch does nothing. |
-| `bypass` | a list of tables, each with one of `role` (`"admin"`, `"maintain"`, `"write"` or a custom role's ID), `app` (a GitHub App's slug), `team` (a team's slug), `org-admin = true` or `deploy-keys = true`, and optionally `mode` (`"always"`, the default, `"pull-request"` or `"exempt"`) | Who can bypass it. |
+| `include`, `exclude` | branch name patterns, such as `["main", "release/*"]`, or `"~DEFAULT_BRANCH"` or `"~ALL"` | The branches it targets. `refs/heads/` is optional. `include` is required. |
+| `bypass` | a list of tables (see below) | Who can bypass the ruleset. |
 | `rules.<rule>` | `true`, or a table of the rule's parameters | Each rule that's on. |
 
-Rules and their parameters have the names that GitHub's REST API and a ruleset's JSON export give them, in kebab case: `non_fast_forward` is `rules.non-fast-forward`, and `pull_request`'s `required_approving_review_count` is `rules.pull-request.required-approving-review-count`.
-A parameter left out has its default, which is what GitHub's ruleset page gives a new rule: off, 0 or empty, except that `pull-request.allowed-merge-methods` allows all three methods, and `merge-queue` defaults to the page's values.
-A required status check is `{ context = "test", app = "github-actions" }`, naming the GitHub App that must report it by its slug, or `{ context = "test" }` for any source; `check` and `ensure` look the app's ID up, and refuse an ID in `pyproject.toml`.
+Each `bypass` entry names one actor.
+That's `role` (`"admin"`, `"maintain"`, `"write"` or a custom role's ID), `app` (a GitHub App's slug), `team` (a team's slug), `org-admin = true` or `deploy-keys = true`.
+It can also give a `mode`: `"always"` (the default), `"pull-request"` or `"exempt"`.
 
-`repoutils rulesets ensure` creates each missing ruleset and replaces each one that differs with the table's, sending every parameter of each rule, then fails if GitHub didn't apply a change.
-A rule parameter repoutils doesn't know of is ignored, so `ensure` may reset it.
+Rules and their parameters have the names that GitHub's REST API and a ruleset's JSON export use, in kebab case.
+So `non_fast_forward` is `rules.non-fast-forward`.
+A parameter left out has the default that GitHub's ruleset page gives a new rule, which is off, 0 or empty.
+The exceptions are `pull-request.allowed-merge-methods`, which allows all three methods, and `merge-queue`, which takes the page's values.
+
+A required status check is `{ context = "test", app = "github-actions" }`.
+`app` is the slug of the GitHub App that must report the check.
+Leave it out to accept the check from any source.
+`check` and `ensure` look up the app's ID themselves, and refuse an ID in `pyproject.toml`.
+
+`repoutils rulesets ensure` creates each missing ruleset.
+It replaces each one that differs with the table's, sending every parameter of each rule.
+Then it fails if GitHub didn't apply a change.
+It ignores a rule parameter repoutils doesn't know, so `ensure` may reset one.
 It never deletes a ruleset.
-`repoutils rulesets check` changes nothing, and fails exactly when `ensure` would change something; `--exit-zero` and `--fail-on-unexpected` work as they do for `labels check`, with `--fail-on-unexpected` failing on branch rulesets `pyproject.toml` doesn't define.
 
-Both need a token that can administer the repository (a fine-grained token with Administration permission: write for `ensure`, read for `check` and `dump`), as GitHub shows a ruleset's bypass list only to one, and GitHub Actions' `GITHUB_TOKEN` can't be given it.
-A ruleset whose bypass list names a team also needs the organization's Members read permission, to look the team up.
+`repoutils rulesets check` changes nothing, and fails in exactly the cases where `ensure` would change something.
+`--exit-zero` and `--fail-on-unexpected` work as they do for `labels check`.
+Here `--fail-on-unexpected` fails on branch rulesets that `pyproject.toml` doesn't define.
 
-`repoutils rulesets dump` prints every branch ruleset the repository has as these tables, for you to paste into `pyproject.toml`; pasted unchanged, `check --fail-on-unexpected` passes, unless `dump` warned about something `check` refuses.
-With `--from-file`, it prints the rulesets in JSON files exported from GitHub's ruleset page instead, so you can design a ruleset there (on any repository) and convert it.
-GitHub has no API that gives a GitHub App's slug from its ID, so `dump` finds the slugs of the apps that ran checks on the latest commit of the default branch, and of each branch the rulesets name; it gives an app (or team) it can't find by its ID and warns, and you replace that with its slug.
-It doesn't read `pyproject.toml` or change it.
+All three need a token that can administer the repository, because GitHub shows a ruleset's bypass list only to such a token.
+For a fine-grained token, that's Administration write for `ensure`, and read for `check` and `dump`.
+GitHub Actions' `GITHUB_TOKEN` can't be given it.
+If a bypass list names a team, the token also needs the organization's Members read permission, to look the team up.
+
+`repoutils rulesets dump` prints every branch ruleset the repository has as these tables.
+You can paste them into `pyproject.toml`.
+If you paste them in unchanged, `check --fail-on-unexpected` passes, unless `dump` warned about something `check` refuses.
+With `--from-file`, it prints the rulesets in JSON files exported from GitHub's ruleset page instead.
+That lets you design a ruleset in GitHub's UI, on any repository, and convert it.
+`dump` neither reads nor changes `pyproject.toml`.
+
+GitHub has no API that gives a GitHub App's slug from its ID.
+So `dump` collects the slugs of the apps that ran checks on the latest commit of the default branch, and of each branch the rulesets name.
+If it can't find an app's or a team's slug, it prints the ID and warns.
+Replace that ID with the slug before you run `check`.
 
 ## Development
 

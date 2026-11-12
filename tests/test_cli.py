@@ -69,6 +69,7 @@ def test_python_dash_m(tmp_path: Path) -> None:
     [
         (["check-checkout-credentials"], "set persist-credentials"),
         (["check-pins"], "pin uv"),
+        (["check-prose", "--exit-zero"], "sentences"),
         (["check-sentence-per-line"], "one-sentence-per-line"),
         (["check-whitespace"], "clean whitespace"),
         (["long-files", "--base", ""], "500 lines"),
