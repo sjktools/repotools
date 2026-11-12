@@ -170,7 +170,7 @@ def test_ensure_fails_if_github_ignores_a_change(
 ) -> None:
     gh = FakeGitHub(DIFFERENT, ignored=frozenset({"deletion"}))
     assert _run(tmp_path, monkeypatch, gh, ["ensure"]) == 1
-    assert capsys.readouterr().err == "GitHub didn't apply the change: main: rule deletion is off on GitHub\n"
+    assert capsys.readouterr().err == "main: GitHub didn't apply:\n  rule deletion is off on GitHub\n"
 
 
 def test_fail_on_unexpected(

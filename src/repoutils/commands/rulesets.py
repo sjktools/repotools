@@ -263,9 +263,10 @@ def ensure(repo: str, token: str, rulesets: dict[str, dict[str, Any]]) -> int:
         for line in _report(p, done=True):
             print(line)
         # GitHub may ignore a setting rather than refuse it, so check each.
-        unapplied += [f"{p.name}: {change}" for change in diff(from_github(updated, names), p.ruleset)]
-    for change in unapplied:
-        print(f"GitHub didn't apply the change: {change}", file=sys.stderr)
+        if missed := diff(from_github(updated, names), p.ruleset):
+            unapplied += [f"{p.name}: GitHub didn't apply:"] + [f"  {change}" for change in missed]
+    for line in unapplied:
+        print(line, file=sys.stderr)
     if unapplied:
         return 1
     changed = sum(p.needs_ensure for p in results)
