@@ -3,11 +3,11 @@
 repoutils is a set of repository checks and CI helpers for Python projects that use uv, just and GitHub Actions.
 You run it as `repoutils <command>`.
 
-Those checks and helpers used to live in the `scripts/` directories of [taxtracker](https://github.com/skissane/taxtracker) and [exolot](https://github.com/skissane/exolot).
-They were pulled together here so that each project can depend on one package instead of keeping its own copies.
+I used to keep these checks and helpers in the `scripts/` directories of several personal projects, such as [exolot](https://github.com/skissane/exolot).
+I pulled them together here so that each project can depend on one package instead of keeping its own copies.
 
 repoutils has no dependencies, and needs only the Python standard library (3.12 or later).
-It has to stay that way, because projects run it in CI jobs that hold write-capable tokens or check out untrusted Dependabot branches, and nothing else should be installed in those jobs.
+It should stay that way, because projects run it in CI jobs that hold write-capable tokens or check out untrusted Dependabot branches, and nothing else should be installed in those jobs.
 
 ## Installing
 
