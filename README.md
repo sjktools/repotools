@@ -130,6 +130,7 @@ A bullet that isn't a full sentence isn't counted.
 
 It reads sentences as English punctuates them.
 A sentence ends at a full stop, a question mark or an exclamation mark, and the next one starts with a capital, a digit or inline code.
+A colon ends one too, at the end of a paragraph or a list item.
 A new line after one of those marks starts a sentence too, whatever its first word is.
 So in a wrapped paragraph, a sentence that starts mid-line with a lowercase word, such as "uv", is read as part of the one before it.
 

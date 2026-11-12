@@ -25,7 +25,8 @@ _RULE_RE = re.compile(r"[-*_=\s]{3,}")
 _HTML_RE = re.compile(r"</?([a-zA-Z][a-zA-Z0-9-]*)(?=[\s/>]|$)")
 # Tags that mark up words inside a sentence; a line that starts with any other tag is an HTML block.
 _INLINE_TAGS = frozenset(
-    "a abbr b br cite code del em i img ins kbd mark q s samp small span strong sub sup u var".split()
+    "a abbr b bdi bdo big br cite code data del dfn em font i img ins kbd mark q s samp small span strike strong sub sup"
+    " time tt u var wbr".split()
 )
 _LINK_DEFINITION_RE = re.compile(r"\[[^\]]+\]:\s")
 _IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]*\)")

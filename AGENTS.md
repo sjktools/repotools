@@ -26,7 +26,7 @@ It supports Python 3.12 and later, so don't use newer syntax or `typing` feature
 - `src/repoutils/config.py` reads the project's `[tool.repoutils]` table from `pyproject.toml` in the current directory.
   Every setting has a default, and command-line options override it.
 - `src/repoutils/github.py` holds the GitHub API helpers the posting commands share.
-  They are a request that never follows a redirect with the token to another host, paginated comment listing, `upsert_comment` and `hide_comments`.
+  They are a request function that never follows a redirect with the token to another host, paginated comment listing, `upsert_comment` and `hide_comments`.
 - `src/repoutils/markdown.py` holds the Markdown reading that `check-sentence-per-line` and `check-prose` share.
   It skips code fences and splits a document's prose into sentences.
 - `tests/test_<module>.py` tests each module, and `tests/test_cli.py` runs every command through `cli.main()`.

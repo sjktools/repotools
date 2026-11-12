@@ -203,6 +203,7 @@ def test_a_line_that_starts_with_an_inline_tag_is_prose() -> None:
     assert _sentences("""\
         <kbd>Ctrl</kbd> and C stop the tool.
         <B>Bold words</B> start this one.
+        <time>Today</time> is the day.
         <https://example.com/> is the site to see.
 
         <details>
@@ -212,7 +213,8 @@ def test_a_line_that_starts_with_an_inline_tag_is_prose() -> None:
         """) == [
         (1, "Ctrl and C stop the tool."),
         (2, "Bold words start this one."),
-        (3, "is the site to see."),
+        (3, "Today is the day."),
+        (4, "is the site to see."),
     ]
 
 
