@@ -63,6 +63,18 @@ allow-update-branch = true
 delete-branch-on-merge = true
 require-web-commit-signoff = false
 
+# The deployment environments `repoutils environments` checks or creates:
+# publish-pypi.yml's. Only a v* tag (a release) may deploy to pypi, so a run of
+# a PR branch's copy of the workflow (which /testpypi dispatches) can't publish
+# to PyPI through trusted publishing; testpypi stays open for /testpypi.
+[tool.repoutils.environments.pypi]
+deployment-branches = "selected"
+allowed-branches = []
+allowed-tags = ["v*"]
+
+[tool.repoutils.environments.testpypi]
+deployment-branches = "all"
+
 # The branch rulesets `repoutils rulesets` checks or creates, each giving only
 # what differs from a new ruleset's defaults. main changes only by a squash-merged
 # PR whose CI passed: every test job (GitHub counts a skipped required check as

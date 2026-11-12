@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 
 from repoutils import cli
+from repoutils.commands.environments import load_environments
 from repoutils.commands.labels import load_labels
 from repoutils.commands.repo_settings import load_settings
 from repoutils.ruleset_format import load_rulesets
@@ -109,6 +110,7 @@ def test_check_screenshots_dir(monkeypatch: pytest.MonkeyPatch, capsys: pytest.C
         (["check-attestations", "a", "b"], "[dist]"),
         (["labels"], "{check,ensure,dump}"),
         (["repo-settings"], "{check,ensure,dump}"),
+        (["environments"], "{check,ensure,dump}"),
         (["rulesets"], "{check,ensure,dump}"),
     ],
 )
@@ -149,6 +151,20 @@ def test_repo_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: 
     monkeypatch.chdir(tmp_path)
     assert cli.main(["repo-settings", "check"]) == 1
     assert "No repository settings are defined" in capsys.readouterr().err
+
+
+def test_environments(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    # A project with no environments fails before anything talks to GitHub.
+    monkeypatch.chdir(tmp_path)
+    assert cli.main(["environments", "check"]) == 1
+    assert "No environments are defined" in capsys.readouterr().err
+
+
+def test_this_repos_environments_load() -> None:
+    # Only a v* tag may deploy to pypi (issue #3).
+    by_name = {environment.name: environment.settings for environment in load_environments(ROOT)}
+    assert by_name["pypi"]["allowed-tags"] == ["v*"]
+    assert by_name["testpypi"]["deployment-branches"] == "all"
 
 
 def test_rulesets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
