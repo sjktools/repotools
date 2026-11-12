@@ -321,9 +321,11 @@ jobs:
       head: ${{ steps.commit.outputs.head }}
 
     steps:
+      # The PR head from the event, which dependabot-push checks the fix is a
+      # single commit on, not the branch, which may have moved since.
       - uses: actions/checkout@v7.0.1
         with:
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
           # Fetch the base branch and history too, for dependabot-relock's merge base.
           fetch-depth: 0
           persist-credentials: false
