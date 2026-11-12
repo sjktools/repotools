@@ -31,6 +31,7 @@ That installs only repoutils, hash-checked against `uv.lock`, and not the projec
 | --- | --- |
 | `check-whitespace` | Fails on trailing whitespace, a leading blank line or a missing or extra final newline in any Git-tracked text file. |
 | `check-sentence-per-line` | Fails if a configured Markdown file (by default `AGENTS.md` and `README.md`) has two sentences on one line. |
+| `check-prose` | Fails if a configured Markdown file's prose has long, clause-heavy sentences, or too many short ones. |
 | `check-blame-ignore-revs` | Fails unless `.git-blame-ignore-revs` lists only full hashes of commits that are ancestors of a target. |
 | `check-screenshots-dir` | Fails unless the screenshots directory's `.gitignore` is the only file tracked there, and still ignores everything else. |
 | `git-config-setup` | Sets the repo's local `blame.ignoreRevsFile`; idempotent, for a justfile to run on every recipe. |
@@ -67,6 +68,11 @@ default-branch = "main"
 
 [tool.repoutils.sentence-per-line]
 files = ["AGENTS.md", "README.md"]
+
+# The limits `repoutils check-prose` holds these files to; see below.
+[tool.repoutils.prose]
+files = ["AGENTS.md", "README.md"]
+max-words-per-sentence = 18
 
 [tool.repoutils.screenshots]
 dir = "screenshots"
@@ -105,6 +111,43 @@ merge-commit.allow = false
 rebase-merge.allow = false
 delete-branch-on-merge = true
 ```
+
+### Prose
+
+`repoutils check-prose` measures the prose in each configured Markdown file, and fails a file whose sentences are, on the whole, long and full of joined clauses.
+That style is common in machine-written documents, and it's tiring to read.
+
+The opposite fault fails too.
+Prose that has been cut up only to get under the limits ends up as a run of very short sentences, which reads no better.
+So one limit caps how many of those a file can have.
+That limit leaves out list items, where a terse sentence is at home.
+It also leaves out a sentence that ends in a colon, which leads into a list or a code block.
+Treat the limits as ceilings and not as targets, and leave a sentence alone if the file already passes.
+
+The command skips code blocks, headings, tables, block quotes and HTML, and counts inline code as one word.
+A bullet that isn't a full sentence isn't counted.
+
+| Setting | Default | What it limits |
+|---|---|---|
+| `max-words-per-sentence` | 18 | The mean number of words in a sentence. |
+| `max-long-sentences` | 12 | The percentage of sentences with more than `long-sentence-words` words (default 30). |
+| `max-short-sentences` | 25 | The percentage of sentences with fewer than `short-sentence-words` words (default 8), list items and lead-ins aside. |
+| `max-commas-per-sentence` | 1.3 | The mean number of commas in a sentence. |
+| `max-semicolons-per-sentence` | 0.05 | The mean number of semicolons in a sentence. |
+| `max-joints-per-sentence` | 0.6 | The mean number of clause joints in a sentence. |
+
+A clause joint is a semicolon, a colon, a dash or a comma before a word such as "and", "but", "because" or "which".
+Set a limit to `false` to turn it off.
+A file with fewer than `min-sentences` sentences (default 15) is too short to judge, and passes.
+`min-sentences`, `long-sentence-words` and `short-sentence-words` are whole numbers.
+
+The limits apply to a whole file, so one long sentence never fails it.
+Under each limit that a file is over, the command lists the five sentences that add most to it.
+The two limits on long sentences share one list, under the first of them that the file is over.
+`--stats` prints every rate for every file, and `--exit-zero` reports the same but exits 0.
+
+The defaults for long sentences come from comparing READMEs written before language models with recent machine-written documents.
+That sample was small (17 documents), and the short-sentence limit rests on less still (a few rewrites of this README), so adjust the limits to suit your project.
 
 ### Labels
 

@@ -48,6 +48,32 @@ def string_list(table: dict[str, Any], key: str, default: list[str], where: str)
     return list(value)
 
 
+def number(table: dict[str, Any], key: str, default: float, where: str) -> float:
+    """``table[key]`` as a number that isn't negative, or ``default`` if it's missing."""
+    value = table.get(key, default)
+    if isinstance(value, bool) or not isinstance(value, int | float) or value < 0:
+        raise ConfigError(f"{where} {key} must be a number, 0 or more")
+    return value
+
+
+def integer(table: dict[str, Any], key: str, default: int, where: str) -> int:
+    """``table[key]`` as a whole number that isn't negative, or ``default`` if it's missing."""
+    value = table.get(key, default)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ConfigError(f"{where} {key} must be a whole number, 0 or more")
+    return value
+
+
+def optional_number(table: dict[str, Any], key: str, default: float, where: str) -> float | None:
+    """As ``number``, but ``None`` if ``table[key]`` is ``false``, which turns the setting off."""
+    if table.get(key) is False:
+        return None
+    try:
+        return number(table, key, default, where)
+    except ConfigError as error:
+        raise ConfigError(f"{error}, or false") from None
+
+
 def comment_prefix(root: Path = Path()) -> str:
     """The prefix of the hidden markers that find this project's PR comments
     (``comment-prefix``, default ``repoutils``)."""

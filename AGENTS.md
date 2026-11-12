@@ -22,6 +22,8 @@ It supports Python 3.12 and later, so don't use newer syntax or `typing` feature
   Most also have a `main()` with plain parameters that the tests call directly.
 - `src/repoutils/config.py` reads the project's `[tool.repoutils]` table from `pyproject.toml` in the current directory; every setting has a default, and command-line options override it.
 - `src/repoutils/github.py` holds the GitHub API helpers the posting commands share: a request that never follows a redirect with the token to another host, paginated comment listing, `upsert_comment` and `hide_comments`.
+- `src/repoutils/markdown.py` holds the Markdown reading that `check-sentence-per-line` and `check-prose` share.
+  It skips code fences and splits a document's prose into sentences.
 - `tests/test_<module>.py` tests each module, and `tests/test_cli.py` runs every command through `cli.main()`.
 
 To add a command, add its module with a `run()`, add it to `cli.GROUPS`, add its tests and a case in `tests/test_cli.py` if it needs one, and add it to the table in `README.md`.
@@ -37,6 +39,9 @@ Before opening a PR, run `just patch-coverage` too, which reports the changed li
 
 The justfile runs repoutils' own checks (`whitespace-check`, `check-pins` and so on) from this checkout, so CI dogfoods them.
 Recipes that CI runs with a write-capable token or on a Dependabot branch use the justfile's `repoutils` variable, which runs `python -m repoutils` from `src/` with `uv run --no-project`, installing nothing (not even the project, whose build backend would otherwise run alongside the token).
+`just prose-check` runs `check-prose` with `--exit-zero`, so it reports where this file's or `README.md`'s prose is over a limit, without failing.
+Its limits are ceilings, not targets, so reword a sentence that it lists, and don't split one that it didn't list.
+Drop `--exit-zero` once both files pass.
 
 `just mypy` type-checks `src` and `tests` in strict mode, so all new code, tests included, needs full type annotations.
 `[tool.pytest.ini_options]` sets `filterwarnings = ["error"]`, so a warning fails its test: fix its cause, or assert it with `pytest.warns` around the call that raises it.

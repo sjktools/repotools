@@ -143,6 +143,10 @@ whitespace-check:
 sentence-per-line-check:
     uv run repoutils check-sentence-per-line
 
+# Report AGENTS.md and README.md prose with long, clause-heavy sentences or too many short ones, without failing (until both pass)
+prose-check:
+    uv run repoutils check-prose --exit-zero
+
 # Check that every workflow and local action pins the uv version pyproject.toml requires and the just version the justfile requires
 check-pins:
     uv run repoutils check-pins
@@ -168,7 +172,7 @@ dependabot-relock base:
     {{ repoutils }} dependabot-relock {{ base }}
 
 # Run all checks, without fixing anything or running tests
-check: lint fmt-check just-fmt-check mypy lint-workflows whitespace-check sentence-per-line-check check-pins check-checkout-credentials lock-platforms-check requirements-check
+check: lint fmt-check just-fmt-check mypy lint-workflows whitespace-check sentence-per-line-check prose-check check-pins check-checkout-credentials lock-platforms-check requirements-check
 
 # Formatting first fixes the long lines it can, so lint-fix stops only on
 # findings that need a hand edit.
