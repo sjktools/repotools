@@ -12,6 +12,7 @@ jobs:
   test:
     strategy:
       fail-fast: false
+      # main's ruleset (in pyproject.toml) requires each of these jobs by name.
       matrix:
         # Not Windows: [tool.uv] environments leaves it out of uv.lock.
         os: [ubuntu-latest, macos-latest]
@@ -45,6 +46,9 @@ jobs:
         run: just test
 
   build:
+    # Named apart from attestations.yml's build job, as main's ruleset requires
+    # this check by name (see pyproject.toml).
+    name: check-and-build
     needs: test
     runs-on: ubuntu-latest
     permissions:

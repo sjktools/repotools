@@ -12,6 +12,7 @@ import re
 from pathlib import Path
 
 from repoutils import config
+from repoutils.markdown import INLINE_CODE_RE, unfenced_lines
 
 DEFAULT_FILES = ["AGENTS.md", "README.md"]
 ABBREVIATIONS = ("e.g.", "i.e.", "etc.")
@@ -20,17 +21,6 @@ ABBREVIATION_RE = re.compile(r"(?<![\w.])(?:" + "|".join(map(re.escape, ABBREVIA
 # An ordered-list marker, optionally after bullet or blockquote markers (e.g. "- 1." or "> 1.").
 LIST_MARKER_RE = re.compile(r"\s*(?:[-*+>]\s*)*\d+\.")
 BOUNDARY_RE = re.compile(r'[.!?][)"*_’”]*[ \t]+[A-Z`“‘\[\(\*]')
-# A code span: a run of backticks, then the shortest text up to a run of the same length; an unmatched run is literal.
-INLINE_CODE_RE = re.compile(r"(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)")
-
-
-def _fence_marker(line: str) -> tuple[str, int] | None:
-    stripped = line.lstrip()
-    if stripped.startswith("```"):
-        return ("`", len(stripped) - len(stripped.lstrip("`")))
-    if stripped.startswith("~~~"):
-        return ("~", len(stripped) - len(stripped.lstrip("~")))
-    return None
 
 
 def _mask_inline_code(line: str) -> str:
@@ -64,21 +54,7 @@ def _line_ignored(line: str) -> bool:
 
 
 def _problems(text: str) -> list[tuple[int, str]]:
-    problems: list[tuple[int, str]] = []
-    fence: tuple[str, int] | None = None
-    for number, line in enumerate(text.splitlines(), 1):
-        marker = _fence_marker(line)
-        if marker is not None:
-            if fence is None:
-                fence = marker
-            elif marker[0] == fence[0] and marker[1] >= fence[1] and not line.strip().strip(fence[0]):
-                fence = None
-            continue
-        if fence is not None or _line_ignored(line):
-            continue
-        if _has_boundary(line):
-            problems.append((number, line))
-    return problems
+    return [(number, line) for number, line in unfenced_lines(text) if not _line_ignored(line) and _has_boundary(line)]
 
 
 def files() -> list[str]:

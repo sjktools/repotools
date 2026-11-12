@@ -26,6 +26,11 @@ GROUPS: dict[str, list[Command]] = {
             "check-sentence-per-line", "check_sentence_per_line", "Check Markdown files keep one sentence per line"
         ),
         Command(
+            "check-prose",
+            "check_prose",
+            "Check Markdown prose for long, clause-heavy sentences, or too many short ones",
+        ),
+        Command(
             "check-blame-ignore-revs", "check_blame_ignore_revs", "Check .git-blame-ignore-revs lists real commits"
         ),
         Command("check-screenshots-dir", "check_screenshots_dir", "Check only .gitignore is tracked in screenshots/"),
@@ -55,6 +60,7 @@ GROUPS: dict[str, list[Command]] = {
         Command("labels", "labels", "Check or create the issue and PR labels pyproject.toml defines"),
         Command("repo-settings", "repo_settings", "Check or change the repository settings pyproject.toml gives"),
         Command("environments", "environments", "Check or create the deployment environments pyproject.toml defines"),
+        Command("rulesets", "rulesets", "Check, create or update the branch rulesets pyproject.toml defines"),
     ],
     "Releases": [
         Command("check-attestations", "check_attestations", "Check every distribution has a PEP 740 attestation"),
