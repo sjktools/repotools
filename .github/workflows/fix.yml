@@ -142,9 +142,11 @@ jobs:
           name: fixes
           path: ${{ runner.temp }}/fixes
 
-      # Pushes with AUTOFIX_TOKEN, not GITHUB_TOKEN, so the push triggers CI. If
-      # the branch moved since the fix job's checkout, the push isn't a
-      # fast-forward and fails. No hooks run, as core.hooksPath is empty.
+      # Pushes with AUTOFIX_TOKEN, not GITHUB_TOKEN, so the push triggers CI.
+      # The lease makes the push fail unless the branch is still at the commit
+      # the fix job started from: a plain push would also succeed if the branch
+      # had since been reset to an ancestor, and restore the commits removed.
+      # No hooks run, as core.hooksPath is empty.
       - name: Push the fixes
         env:
           AUTOFIX_TOKEN: ${{ secrets.AUTOFIX_TOKEN }}
@@ -158,6 +160,12 @@ jobs:
             echo "::error::The bundle's head isn't the commit the fix job made."
             exit 1
           fi
+          # The lease makes the push a forced one, so check it only adds commits.
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" "$HEAD_SHA"; then
+            echo "::error::The bundle's head doesn't descend from the commit the fix job started from."
+            exit 1
+          fi
           git -c core.hooksPath=/dev/null push \
+            "--force-with-lease=refs/heads/${BRANCH}:${GITHUB_SHA}" \
             "https://x-access-token:${AUTOFIX_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
             "${HEAD_SHA}:refs/heads/${BRANCH}"

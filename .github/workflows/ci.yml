@@ -414,14 +414,16 @@ jobs:
           path: ${{ runner.temp }}/dependabot-fix
 
       # Pushes with DEPENDABOT_FIX_TOKEN, not GITHUB_TOKEN, so the push triggers a
-      # new workflow run. If Dependabot updates the branch after checkout, the push
-      # fails; the run Dependabot's push triggers redoes the fix. No hooks run, as
+      # new workflow run. The lease makes the push fail unless the branch is still
+      # at the PR head this run started from; if Dependabot has updated it, the
+      # run Dependabot's push triggers redoes the fix. No hooks run, as
       # core.hooksPath is empty.
       - name: Push the fix
         env:
           DEPENDABOT_FIX_TOKEN: ${{ secrets.DEPENDABOT_FIX_TOKEN }}
           HEAD_REF: ${{ github.head_ref }}
           HEAD_SHA: ${{ needs.dependabot-fix.outputs.head }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           REPOSITORY: ${{ github.repository }}
         run: |
           bundle="$RUNNER_TEMP/dependabot-fix/dependabot-fix.bundle"
@@ -444,6 +446,7 @@ jobs:
             exit 1
           fi
           git -c core.hooksPath=/dev/null push \
+            "--force-with-lease=refs/heads/${HEAD_REF}:${PR_HEAD_SHA}" \
             "https://x-access-token:${DEPENDABOT_FIX_TOKEN}@github.com/${REPOSITORY}.git" \
             "${HEAD_SHA}:refs/heads/${HEAD_REF}"
 
