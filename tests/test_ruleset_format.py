@@ -174,12 +174,24 @@ def test_diff() -> None:
     theirs = {"enforcement": "disabled", "rules": {"pull-request": {}, "non-fast-forward": {}}}
     assert diff(theirs, ours) == [
         'enforcement is "disabled" on GitHub, not "active"',
-        'include is [] on GitHub, not ["main"]',
+        'include: GitHub lacks "main"',
         "rule deletion is off on GitHub",
-        "rule pull-request is {} on GitHub, not { required-approving-review-count = 1 }",
+        "rule pull-request required-approving-review-count is 0 on GitHub, not 1",
         "rule non-fast-forward is on on GitHub, but pyproject.toml leaves it off",
     ]
     assert diff(ours, ours) == []
+
+
+def test_diff_names_only_the_list_items_that_differ() -> None:
+    def checks(*contexts: str) -> dict[str, Any]:
+        return {"rules": {"required-status-checks": {"required-status-checks": [{"context": c} for c in contexts]}}}
+
+    assert diff(checks("a", "b", "old"), checks("a", "b", "new", "newer")) == [
+        'rule required-status-checks required-status-checks: GitHub lacks { context = "new" }, { context = "newer" }',
+        'rule required-status-checks required-status-checks: GitHub also has { context = "old" }',
+    ]
+    # An unknown rule's parameter has no default.
+    assert diff({"rules": {"x": {}}}, {"rules": {"x": {"p": 1}}}) == ["rule x p is None on GitHub, not 1"]
 
 
 @pytest.mark.parametrize(

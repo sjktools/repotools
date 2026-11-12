@@ -220,7 +220,7 @@ def _report(p: Plan, *, done: bool) -> list[str]:
     if p.existing_id is None:
         return [f"{p.name}: {'created' if done else 'missing'}"]
     if p.changes:
-        return [f"{p.name}: {'updated' if done else 'needs updating'}: {'; '.join(p.changes)}"]
+        return [f"{p.name}: {'updated' if done else 'needs updating'}:"] + [f"  {change}" for change in p.changes]
     return []
 
 

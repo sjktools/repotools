@@ -409,21 +409,37 @@ def to_github(name: str, ruleset: dict[str, Any], names: Names) -> dict[str, Any
     }
 
 
+def _differences(label: str, theirs: Any, ours: Any) -> list[str]:
+    """How GitHub's value of label (theirs) differs from pyproject.toml's (ours): for
+    lists, just the items one has and the other lacks."""
+    if theirs == ours:
+        return []
+    if isinstance(theirs, list) and isinstance(ours, list):
+        missing, extra = [v for v in ours if v not in theirs], [v for v in theirs if v not in ours]
+        changes = [f"{label}: GitHub lacks {', '.join(map(_toml, missing))}"] if missing else []
+        return changes + ([f"{label}: GitHub also has {', '.join(map(_toml, extra))}"] if extra else [])
+    return [f"{label} is {_toml(theirs)} on GitHub, not {_toml(ours)}"]
+
+
 def diff(theirs: dict[str, Any], ours: dict[str, Any]) -> list[str]:
     """How GitHub's ruleset (theirs) differs from pyproject.toml's (ours), both as load_rulesets gives them."""
     changes = []
     for key in KEYS[:-1]:
         default = "active" if key == "enforcement" else []
-        if theirs.get(key, default) != ours.get(key, default):
-            changes.append(f"{key} is {_toml(theirs.get(key, default))} on GitHub, not {_toml(ours.get(key, default))}")
+        changes += _differences(key, theirs.get(key, default), ours.get(key, default))
     their_rules, our_rules = theirs.get("rules", {}), ours.get("rules", {})
     for key in [*our_rules, *(k for k in their_rules if k not in our_rules)]:
         if key not in their_rules:
             changes.append(f"rule {key} is off on GitHub")
         elif key not in our_rules:
             changes.append(f"rule {key} is on on GitHub, but pyproject.toml leaves it off")
-        elif their_rules[key] != our_rules[key]:
-            changes.append(f"rule {key} is {_toml(their_rules[key])} on GitHub, not {_toml(our_rules[key])}")
+        else:
+            schema = RULES.get(_snake(key), {})
+            mine, yours = our_rules[key], their_rules[key]
+            for param in [*mine, *(p for p in yours if p not in mine)]:
+                fallback: Any = schema.get(_snake(param))
+                fallback = None if fallback is None or isinstance(fallback, Required) else _normal(fallback)
+                changes += _differences(f"rule {key} {param}", yours.get(param, fallback), mine.get(param, fallback))
     return changes
 
 

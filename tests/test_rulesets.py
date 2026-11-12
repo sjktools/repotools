@@ -150,15 +150,17 @@ def test_different(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pyte
     gh = FakeGitHub(DIFFERENT)
     assert _run(tmp_path, monkeypatch, gh, ["check"]) == 1
     assert capsys.readouterr().out == (
-        'main: needs updating: enforcement is "disabled" on GitHub, not "active"; rule deletion is off on GitHub; '
-        "rule required-status-checks is off on GitHub; "
-        "rule non-fast-forward is on on GitHub, but pyproject.toml leaves it off\n"
+        "main: needs updating:\n"
+        '  enforcement is "disabled" on GitHub, not "active"\n'
+        "  rule deletion is off on GitHub\n"
+        "  rule required-status-checks is off on GitHub\n"
+        "  rule non-fast-forward is on on GitHub, but pyproject.toml leaves it off\n"
         "1 of 1 ruleset(s) in o/r need `repoutils rulesets ensure`.\n"
     )
     assert _run(tmp_path, monkeypatch, gh, ["check", "--exit-zero"]) == 0
     capsys.readouterr()
     assert _run(tmp_path, monkeypatch, gh, ["ensure"]) == 0
-    assert capsys.readouterr().out.startswith("main: updated: enforcement is")
+    assert capsys.readouterr().out.startswith("main: updated:\n  enforcement is")
     assert [(method, path) for method, path, _ in gh.writes] == [("PUT", "/repos/o/r/rulesets/1")]
     assert _run(tmp_path, monkeypatch, gh, ["check"]) == 0
 
