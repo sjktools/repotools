@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from repoutils.commands.check_pins import UV, main, minimums, pins, steps
+from repoutils.config import ConfigError
 
 WORKFLOW = """\
 jobs:
@@ -175,8 +176,17 @@ def test_main_fails_when_no_step_is_recognized(repo: Path, capsys: pytest.Captur
 
 def test_main_rejects_unexpected_minimums(repo: Path) -> None:
     (repo / "pyproject.toml").write_text('[tool.uv]\nrequired-version = "==0.13.6"\n')
-    with pytest.raises(ValueError, match="isn't of the form"):
+    with pytest.raises(
+        ConfigError, match=r"pyproject\.toml: \[tool\.uv\] required-version '==0\.13\.6' isn't of the form"
+    ):
         main(repo)
+    (repo / "pyproject.toml").write_text("[tool.uv]\nrequired-version = 3\n")
+    with pytest.raises(ConfigError, match="required-version 3 isn't of the form"):
+        minimums(repo)
+    for text in ("", "tool = 3\n", "[tool]\nuv = 3\n", "[tool.uv]\n"):
+        (repo / "pyproject.toml").write_text(text)
+        with pytest.raises(ConfigError, match="required-version is missing"):
+            minimums(repo)
     (repo / "pyproject.toml").write_text('[tool.uv]\nrequired-version = ">=0.13.6, <0.14"\n')
     assert minimums(repo)[UV] == "0.13.6"
     (repo / "justfile").write_text("default:\n")

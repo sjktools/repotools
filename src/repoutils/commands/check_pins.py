@@ -115,9 +115,13 @@ def workflow_files(root: Path) -> list[Path]:
 
 
 def minimums(root: Path) -> dict[tuple[str, str], str]:
-    required = config.read_pyproject(root / config.PYPROJECT)["tool"]["uv"]["required-version"]
-    if not required.startswith(">="):
-        raise ValueError(f"[tool.uv] required-version {required!r} isn't of the form >=X.Y.Z")
+    path = root / config.PYPROJECT
+    tool = config.read_pyproject(path).get("tool", {})
+    uv = tool.get("uv", {}) if isinstance(tool, dict) else {}
+    required = uv.get("required-version") if isinstance(uv, dict) else None
+    if not isinstance(required, str) or not required.startswith(">="):
+        found = "is missing" if required is None else f"{required!r} isn't of the form >=X.Y.Z"
+        raise config.ConfigError(f"{path}: [tool.uv] required-version {found}")
     match = _JUST_MIN_RE.search((root / "justfile").read_text())
     if match is None:
         raise ValueError("justfile has no `set minimum-version := '...'`")
