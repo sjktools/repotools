@@ -220,7 +220,11 @@ def test_bad_pyproject_setting_prints_one_line_error(
     ],
 )
 def test_malformed_pyproject_prints_one_line_error(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], args: list[str], needs_lock: bool
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    args: list[str],
+    needs_lock: bool,
 ) -> None:
     monkeypatch.chdir(tmp_path)
     (tmp_path / "pyproject.toml").write_text("[tool.repoutils\n")
