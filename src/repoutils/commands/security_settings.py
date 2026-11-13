@@ -62,11 +62,14 @@ def _security_and_analysis(repo: str, token: str) -> dict[str, Any]:
     return found
 
 
-def _status(field_name: str) -> Callable[[dict[str, Any]], bool]:
-    """A reader of field_name's status in security_and_analysis."""
+def _status(field_name: str, *, absent_is_off: bool = False) -> Callable[[dict[str, Any]], bool]:
+    """A reader of field_name's status in security_and_analysis, which, if
+    absent_is_off, reads a missing field as disabled."""
 
     def read(analysis: dict[str, Any]) -> bool:
         status = (analysis.get(field_name) or {}).get("status")
+        if status is None and absent_is_off:
+            return False
         if status not in ("enabled", "disabled"):
             raise RuntimeError(f"GitHub returned {status!r} as the status of {field_name}, not enabled or disabled")
         return bool(status == "enabled")
@@ -145,7 +148,8 @@ SETTINGS = [
     Setting(
         "dependabot-security-updates",
         "Dependabot security updates",
-        _status("dependabot_security_updates"),
+        # GitHub may leave it out while Dependabot alerts are off.
+        _status("dependabot_security_updates", absent_is_off=True),
         None,
         _toggle_writer("automated-security-fixes"),
     ),
@@ -284,8 +288,13 @@ def ensure(repo: str, token: str, settings: dict[Setting, bool]) -> int:
     turn_off = [setting for setting in reversed(SETTINGS) if setting in changed and not settings[setting]]
     turn_on = [setting for setting in SETTINGS if setting in changed and settings[setting]]
     codeql_started = False
-    for setting in turn_off + turn_on:
-        response = setting.write(repo, token, settings[setting])
+    for done, setting in enumerate(turn_off + turn_on):
+        try:
+            response = setting.write(repo, token, settings[setting])
+        except urllib.error.HTTPError:
+            # main reports the error; this says the earlier changes stay made.
+            print(f"Stopped after {done} of {len(changed)} change(s) to {repo}.", file=sys.stderr)
+            raise
         if setting.key == "codeql-default-setup" and isinstance(response, dict) and response.get("run_url"):
             codeql_started = True
             print(f"GitHub started CodeQL default setup: {response['run_url']}")

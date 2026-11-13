@@ -281,7 +281,8 @@ def test_ensure_reports_a_refused_change(
     gh.refused = {"PUT vulnerability-alerts": 422}
     assert _run(tmp_path, monkeypatch, gh, ["ensure"]) == 1
     assert gh.writes() == [("PUT", "vulnerability-alerts", None)]
-    assert "HTTP 422 from" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert err.startswith("Stopped after 0 of 3 change(s) to o/r.\nHTTP 422 from")
 
 
 def test_dump_round_trips_through_check(
@@ -389,6 +390,22 @@ def test_gh_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pyt
     monkeypatch.setattr(github, "gh_output", gh_output)
     assert security_settings.main(["check"]) == 1
     assert capsys.readouterr().err == "gh auth token failed:\nnot logged in\n"
+
+
+def test_missing_security_updates_status_reads_as_off(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    gh = FakeGitHub(ALL_OFF)
+
+    def request(method: str, url: str, token: str, **kwargs: Any) -> Any:
+        response = gh(method, url, token, **kwargs)
+        if url == URL:
+            del response["security_and_analysis"]["dependabot_security_updates"]
+        return response
+
+    pyproject = "[tool.repoutils.security-settings]\ndependabot-security-updates = false\n"
+    assert _run(tmp_path, monkeypatch, request, ["check"], pyproject) == 0
+    assert "All 1 setting(s) in o/r match" in capsys.readouterr().out
 
 
 def test_setting_keys_are_unique() -> None:
