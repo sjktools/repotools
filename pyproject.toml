@@ -63,6 +63,17 @@ allow-update-branch = true
 delete-branch-on-merge = true
 require-web-commit-signoff = false
 
+# The Actions settings `repoutils actions-settings` checks or changes. The
+# GITHUB_TOKEN stays read-only, as each job asks for what it needs.
+[tool.repoutils.actions-settings]
+allowed-actions = "all"
+default-token-permissions = "read"
+fork-pr-approval = "first-time-contributors"
+retention-days = 90
+
+[tool.repoutils.actions-settings.oidc]
+immutable-subject = true
+
 # The secrets `repoutils secrets` checks the repository has (see AGENTS.md).
 [tool.repoutils.secrets]
 actions = ["AUTOFIX_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "CODECOV_TOKEN", "GH_ACTIONS_TOKEN"]

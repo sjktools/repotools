@@ -116,8 +116,12 @@ def toml_string(value: str) -> str:
     return json.dumps(value, ensure_ascii=False).replace("\x7f", "\\u007f")
 
 
-def toml_value(value: bool | str) -> str:
+def toml_value(value: bool | int | str | list[str]) -> str:
     """value as TOML."""
     if isinstance(value, bool):
         return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, list):
+        return "[" + ", ".join(map(toml_string, value)) + "]"
     return toml_string(value)
