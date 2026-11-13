@@ -111,6 +111,7 @@ class AddedLinesTests(_GitRepoTestCase):
     def test_renames_deletions_and_odd_paths(self) -> None:
         self.write("src/moved.py", "".join(f"line {i}\n" for i in range(20)))
         self.write("gone.py", "x\n")
+        self.write("no_newline.py", "first")
         self.commit()
         base = self.git("rev-parse", "HEAD").strip()
         self.git("mv", "src/moved.py", "src/renamed.py")
@@ -118,16 +119,19 @@ class AddedLinesTests(_GitRepoTestCase):
         self.git("rm", "-q", "gone.py")
         self.write('dir/tab\there "quoted" é.py', "odd\n")
         self.write("crlf.py", "windows\r\n")
-        self.write("no_newline.py", "last")
+        self.write("no_newline.py", "changed\nlast")
+        self.write("control\x01.py", "ctrl\n")
         (self.repo / "binary.bin").write_bytes(b"\0FIXME\0")
         self.commit()
 
         self.assertEqual(
             sorted(added_lines(self.repo, base), key=lambda loc: loc.path),
             [
+                Location("control\x01.py", 1, "ctrl"),
                 Location("crlf.py", 1, "windows"),
                 Location('dir/tab\there "quoted" é.py', 1, "odd"),
-                Location("no_newline.py", 1, "last"),
+                Location("no_newline.py", 1, "changed"),
+                Location("no_newline.py", 2, "last"),
                 Location("src/renamed.py", 21, "added"),
             ],
         )

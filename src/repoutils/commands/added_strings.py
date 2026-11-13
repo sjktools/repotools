@@ -200,23 +200,20 @@ def added_lines(cwd: Path, base: str) -> Iterator[Location]:
         capture_output=True,
         check=True,
     ).stdout.decode(errors="replace")
-    path: str | None = None
+    path = ""
     line = old_left = new_left = 0
     for text in diff.split("\n"):
         if old_left or new_left:
             # A hunk's lines, which can look like headers ("+++ x" adds "++ x").
             if text.startswith("+"):
-                if path is not None:
-                    yield Location(path, line, text[1:].rstrip("\r"))
+                yield Location(path, line, text[1:].rstrip("\r"))
                 line += 1
                 new_left -= 1
             elif text.startswith("-"):
                 old_left -= 1
         elif text.startswith("+++ "):
-            name = _unquote(text[4:].rstrip("\t"))
-            path = name[2:] if name.startswith("b/") else None
-        elif text.startswith("diff --git "):
-            path = None
+            # "b/<path>", or /dev/null for a deleted file, which adds no lines.
+            path = _unquote(text[4:].rstrip("\t")).removeprefix("b/")
         elif match := _HUNK.match(text):
             old_left = 1 if match[1] is None else int(match[1])
             line = int(match[2])
