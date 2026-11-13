@@ -175,6 +175,9 @@ class FindTests(_GitRepoTestCase):
     def test_nothing_added(self) -> None:
         self.assertEqual(find(self.repo, load_config(self.repo), "main"), [])
 
+    def test_no_rules_needs_no_base(self) -> None:
+        self.assertEqual(find(self.repo, Config(rules=[]), "no-such-branch"), [])
+
 
 class LoadConfigTests(_GitRepoTestCase):
     def test_reads_the_table(self) -> None:

@@ -230,6 +230,9 @@ def added_lines(cwd: Path, base: str) -> Iterator[Location]:
 def find(cwd: Path, config: Config, base: str) -> list[Finding]:
     """The configured strings the lines added since base contain, each with
     where, in the order they're configured. Strings with no matches are left out."""
+    if not config.rules:
+        # Nothing to look for, so no need for base, which may not be fetched.
+        return []
     lines = [location for location in added_lines(cwd, base) if config.covers(location.path)]
     findings = []
     for rule in config.rules:
