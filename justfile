@@ -56,6 +56,11 @@ wait-for-base-coverage *args:
 long-files *args:
     {{ repoutils }} long-files "$@"
 
+# List the configured strings the lines added since a base have, or post that to a PR (--post <PR>)
+[positional-arguments]
+added-strings *args:
+    {{ repoutils }} added-strings "$@"
+
 # Build the sdist and wheel into dist/
 build:
     uv build

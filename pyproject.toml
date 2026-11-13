@@ -47,6 +47,24 @@ default-branch = "main"
 include = ["*.py"]
 limit = 500
 
+# The strings `repoutils added-strings` points out when a PR adds them, as
+# coding agents often add them where they aren't needed. Regexes, so that a
+# string or test data naming them doesn't match (tests/test_added_strings.py
+# checks them).
+[tool.repoutils.added-strings]
+include = ["*.py"]
+
+# Formatted code has it on a line of its own.
+[[tool.repoutils.added-strings.strings]]
+regex = '^\s*if (typing\.)?TYPE_CHECKING\b'
+name = "if TYPE_CHECKING:"
+
+# A comment, not text inside a one-line string: only whole string literals
+# come before the #. ruff reads noqa case-insensitively, and a bare one too.
+[[tool.repoutils.added-strings.strings]]
+regex = '''^(?:[^"'#]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*#\s*(?i:noqa)\b'''
+name = "# noqa"
+
 # The repository settings `repoutils repo-settings` checks or changes.
 [tool.repoutils.repo-settings]
 issues = true
@@ -134,9 +152,10 @@ required-status-checks = [
     { context = "check-and-build", app = "github-actions" },
     { context = "coverage", app = "github-actions" },
     { context = "actions-lock", app = "github-actions" },
-    # These two report on the PR, but also run repoutils' own long-files and
-    # post-patch-coverage, so they fail if a PR breaks either command.
+    # These three report on the PR, but also run repoutils' own long-files,
+    # added-strings and post-patch-coverage, so they fail if a PR breaks one.
     { context = "long-files", app = "github-actions" },
+    { context = "added-strings", app = "github-actions" },
     { context = "post-patch-coverage", app = "github-actions" },
 ]
 
