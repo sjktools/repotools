@@ -349,8 +349,10 @@ def dump(repo: str, token: str) -> int:
             responses[endpoint] = github.request("GET", url(repo, endpoint), token)
         except urllib.error.HTTPError as e:
             # Some settings don't apply to every repository (to a private
-            # one's forks, say), and GitHub says so with a 404.
-            if e.code != 404:
+            # one's forks, say), and GitHub says so with a 404. Every
+            # repository has the first, so a 404 there is a wrong name or
+            # no access to the repository, which is an error.
+            if e.code != 404 or endpoint is PERMISSIONS:
                 raise
             e.close()
             responses[endpoint] = None

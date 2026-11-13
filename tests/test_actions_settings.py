@@ -409,14 +409,16 @@ def test_dump_leaves_out_what_it_cant_give(
     assert _run(tmp_path, monkeypatch, FakeGitHub(existing), ["check"], out) == 0
 
 
+@pytest.mark.parametrize("code", [403, 404])
 def test_dump_fails_on_other_http_errors(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], code: int
 ) -> None:
+    # A 404 from the first endpoint means the repository's name is wrong, or the token can't see it.
     def request(*args: object, **kwargs: object) -> Any:
-        raise _http_error(403)
+        raise _http_error(code)
 
     assert _run(tmp_path, monkeypatch, request, ["dump"], "") == 1
-    assert capsys.readouterr().err.startswith("HTTP 403 from https://x:")
+    assert capsys.readouterr().err.startswith(f"HTTP {code} from https://x:")
 
 
 def test_dump_with_actions_disabled() -> None:
