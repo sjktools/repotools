@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 
 from repoutils import cli
+from repoutils.commands import actions_settings
 from repoutils.commands.environments import load_environments
 from repoutils.commands.labels import load_labels
 from repoutils.commands.repo_settings import load_settings
@@ -115,6 +116,7 @@ def test_check_screenshots_dir(monkeypatch: pytest.MonkeyPatch, capsys: pytest.C
         (["secrets"], "{check,dump,check-workflows}"),
         (["environments"], "{check,ensure,dump}"),
         (["rulesets"], "{check,ensure,dump}"),
+        (["actions-settings"], "{check,ensure,dump}"),
         (["security-settings"], "{check,ensure,dump}"),
     ],
 )
@@ -278,6 +280,13 @@ def test_repo_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: 
     assert "No repository settings are defined" in capsys.readouterr().err
 
 
+def test_actions_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    # A project with no Actions settings fails before anything talks to GitHub.
+    monkeypatch.chdir(tmp_path)
+    assert cli.main(["actions-settings", "check"]) == 1
+    assert "No Actions settings are defined" in capsys.readouterr().err
+
+
 def test_security_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     # A project with no security settings fails before anything talks to GitHub.
     monkeypatch.chdir(tmp_path)
@@ -334,6 +343,11 @@ def test_this_repos_rulesets_load() -> None:
 
 def test_this_repos_settings_load() -> None:
     assert {setting.key for setting in load_settings(ROOT)} >= {"issues", "squash-merge.allow"}
+
+
+def test_this_repos_actions_settings_load() -> None:
+    keys = {setting.key for setting in actions_settings.load_settings(ROOT)}
+    assert {"allowed-actions", "default-token-permissions"} <= keys
 
 
 def test_this_repos_labels_load() -> None:
