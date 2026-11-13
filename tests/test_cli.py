@@ -151,6 +151,12 @@ def test_comment_posters(
             False,
         ),
         (
+            ["check-prose", "--exit-zero"],
+            "[tool.repoutils.prose]\nfiles = 'README.md'\n",
+            "[tool.repoutils.prose] files must be a list of strings",
+            False,
+        ),
+        (
             ["check-sentence-per-line"],
             "[tool.repoutils.sentence-per-line]\nfiles = 3\n",
             "[tool.repoutils.sentence-per-line] files must be a list of strings",
@@ -202,15 +208,14 @@ def test_bad_pyproject_setting_prints_one_line_error(
     if needs_lock:
         (tmp_path / "uv.lock").write_text("version = 1\n")
     assert cli.main(args) == 1
-    err = capsys.readouterr().err
-    assert err == f"{message}\n"
-    assert "Traceback" not in err
+    assert capsys.readouterr().err == f"{message}\n"
 
 
 @pytest.mark.parametrize(
     ("args", "needs_lock"),
     [
         (["check-prose"], False),
+        (["check-prose", "--exit-zero"], False),
         (["check-sentence-per-line"], False),
         (["check-screenshots-dir"], False),
         (["check-lock-platforms"], True),
@@ -219,22 +224,39 @@ def test_bad_pyproject_setting_prints_one_line_error(
         (["post-screenshots", "1"], False),
     ],
 )
-def test_malformed_pyproject_prints_one_line_error(
+@pytest.mark.parametrize(
+    ("content", "message"),
+    [
+        (b"[tool.repoutils\n", "pyproject.toml: Expected ']' at the end of a table declaration (at line 1, column 16)"),
+        (b'[tool.repoutils]\nx = "\xff"\n', "pyproject.toml: not valid UTF-8"),
+    ],
+)
+def test_unparsable_pyproject_prints_one_line_error(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     args: list[str],
     needs_lock: bool,
+    content: bytes,
+    message: str,
 ) -> None:
+    # The message names the file, and --exit-zero doesn't forgive it.
     monkeypatch.chdir(tmp_path)
-    (tmp_path / "pyproject.toml").write_text("[tool.repoutils\n")
+    (tmp_path / "pyproject.toml").write_bytes(content)
     if needs_lock:
         (tmp_path / "uv.lock").write_text("version = 1\n")
     assert cli.main(args) == 1
-    err = capsys.readouterr().err
-    assert err
-    assert "Traceback" not in err
-    assert len(err.splitlines()) == 1
+    assert capsys.readouterr().err == f"{message}\n"
+
+
+def test_other_value_error_keeps_its_traceback(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Only a ConfigError is the project's mistake: any other ValueError is a bug, so it isn't swallowed.
+    def run(argv: list[str]) -> int:
+        raise ValueError("a bug")
+
+    monkeypatch.setattr(cli, "load", lambda name: run)
+    with pytest.raises(ValueError, match="a bug"):
+        cli.main(["check-prose"])
 
 
 def test_labels(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
