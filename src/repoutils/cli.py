@@ -63,6 +63,7 @@ GROUPS: dict[str, list[Command]] = {
         Command("secrets", "secrets", "Check the repository has the secrets pyproject.toml names"),
         Command("rulesets", "rulesets", "Check, create or update the branch rulesets pyproject.toml defines"),
         Command("actions-settings", "actions_settings", "Check or change the Actions settings pyproject.toml gives"),
+        Command("security-settings", "security_settings", "Check or change the security settings pyproject.toml gives"),
     ],
     "Releases": [
         Command("check-attestations", "check_attestations", "Check every distribution has a PEP 740 attestation"),

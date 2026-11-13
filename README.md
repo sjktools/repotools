@@ -53,9 +53,10 @@ That installs only repoutils, hash-checked against `uv.lock`, and not the projec
 | `environments` | Checks, creates or updates the deployment environments `pyproject.toml` defines, or prints the ones the repository has. |
 | `actions-settings` | Checks or changes the Actions settings `pyproject.toml` gives, or prints the ones the repository has. |
 | `secrets` | Checks the repository has the Actions and Dependabot secrets `pyproject.toml` names, or prints the names it has. Also checks the workflows use exactly those secrets. |
+| `security-settings` | Checks or changes the security settings `pyproject.toml` gives, such as secret protection, or prints the ones the repository has. |
 | `check-attestations` | Fails unless every distribution in `dist/` has a PEP 740 publish attestation. |
 
-The commands that post to a PR need a GitHub token, and so do `labels`, `repo-settings`, `actions-settings`, `rulesets`, `environments` and `secrets`.
+The commands that post to a PR need a GitHub token, and so do `labels`, `repo-settings`, `actions-settings`, `rulesets`, `environments`, `secrets` and `security-settings`.
 They read `$GITHUB_TOKEN`, and fall back to `gh auth token`.
 
 ## Configuration
@@ -138,6 +139,12 @@ required-status-checks = { required-status-checks = [{ context = "test", app = "
 actions = ["CODECOV_TOKEN"]
 dependabot = ["DEPENDABOT_FIX_TOKEN"]
 other = ["ORG_DEPLOY_KEY"]
+
+# The security settings that `repoutils security-settings` checks or changes; see below.
+[tool.repoutils.security-settings]
+dependabot-alerts = true
+secret-protection = true
+push-protection = true
 
 # The deployment environments `repoutils environments` checks or creates; see below.
 [tool.repoutils.environments.pypi]
@@ -458,6 +465,53 @@ It fails if a workflow uses a secret that none of the three lists names.
 It also fails if a list names a secret that no workflow uses.
 So the table can't fall behind the workflows.
 It skips `GITHUB_TOKEN`, which GitHub provides, and anything in a comment.
+
+### Security settings
+
+`[tool.repoutils.security-settings]` covers the settings on a repository's Advanced Security settings page that GitHub's REST API can read and change.
+Each one is `true` or `false`.
+All of them are optional, but `check` and `ensure` fail if the table doesn't set any.
+A setting the table leaves out stays as it is on GitHub.
+
+| Setting | On GitHub's Advanced Security page |
+|---|---|
+| `private-vulnerability-reporting` | Private vulnerability reporting |
+| `dependabot-alerts` | Dependabot alerts |
+| `dependabot-security-updates` | Dependabot security updates |
+| `codeql-default-setup` | CodeQL analysis, with the default setup (on) or not set up (off) |
+| `secret-protection` | Secret Protection |
+| `push-protection` | Push protection, under Secret Protection |
+
+The page has other settings that GitHub's API can't read or change on their own, so the table rejects them.
+They are the dependency graph, automatic dependency submission, Dependabot malware alerts, grouped security updates and Copilot Autofix.
+Turning on `dependabot-alerts` also turns on the dependency graph.
+`codeql-default-setup` only turns CodeQL on or off, and leaves its languages and query suite to GitHub.
+
+Some settings need others.
+Dependabot security updates need Dependabot alerts, and push protection needs secret protection.
+The table can't turn one on while turning the one it needs off.
+If it turns one on and leaves out the one it needs, which is off on GitHub, GitHub refuses or ignores the change and `ensure` fails.
+`ensure` turns settings off before it turns any on, and does each in an order that respects this.
+
+`repoutils security-settings ensure` changes every setting that differs, then reads them all back.
+It fails if GitHub didn't apply one.
+That can happen when the repository's plan doesn't offer the setting, such as CodeQL on a private repository without GitHub Code Security.
+It can also happen when an organization's security configuration controls the setting.
+GitHub turns on CodeQL default setup by starting a run, so `ensure` waits up to two minutes for it.
+
+`repoutils security-settings check` changes nothing, and fails in exactly the cases where `ensure` would change something.
+`--exit-zero` works the same way as it does for `labels check`.
+
+All three need a token that can administer the repository, because GitHub shows these settings only to such a token.
+For a fine-grained token, that's Administration write for `ensure`, and read for `check` and `dump`.
+GitHub Actions' `GITHUB_TOKEN` can't be given it.
+`check` fails if the token can't see them, rather than treating them as off.
+
+`repoutils security-settings dump` prints every setting in the table above with the value the repository has for it, under a comment giving its label on GitHub.
+Paste it into `pyproject.toml` and trim it down to the settings you want to keep the same.
+If you paste it in unchanged, `check` passes.
+`dump` neither reads nor changes `pyproject.toml`.
+If GitHub refuses to give a setting, `dump` leaves it out and says so on stderr.
 
 ## Development
 

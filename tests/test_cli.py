@@ -19,6 +19,7 @@ from repoutils.commands.environments import load_environments
 from repoutils.commands.labels import load_labels
 from repoutils.commands.repo_settings import load_settings
 from repoutils.commands.secrets import load_secrets
+from repoutils.commands.security_settings import load_settings as load_security_settings
 from repoutils.ruleset_format import load_rulesets
 
 ROOT = Path(__file__).parents[1]
@@ -116,6 +117,7 @@ def test_check_screenshots_dir(monkeypatch: pytest.MonkeyPatch, capsys: pytest.C
         (["environments"], "{check,ensure,dump}"),
         (["rulesets"], "{check,ensure,dump}"),
         (["actions-settings"], "{check,ensure,dump}"),
+        (["security-settings"], "{check,ensure,dump}"),
     ],
 )
 def test_usage_errors(capsys: pytest.CaptureFixture[str], args: list[str], usage: str) -> None:
@@ -283,6 +285,18 @@ def test_actions_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsy
     monkeypatch.chdir(tmp_path)
     assert cli.main(["actions-settings", "check"]) == 1
     assert "No Actions settings are defined" in capsys.readouterr().err
+
+
+def test_security_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    # A project with no security settings fails before anything talks to GitHub.
+    monkeypatch.chdir(tmp_path)
+    assert cli.main(["security-settings", "check"]) == 1
+    assert "No security settings are defined" in capsys.readouterr().err
+
+
+def test_this_repos_security_settings_load() -> None:
+    settings = {setting.key: value for setting, value in load_security_settings(ROOT).items()}
+    assert settings["secret-protection"] is True
 
 
 def test_secrets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:

@@ -74,6 +74,17 @@ retention-days = 90
 [tool.repoutils.actions-settings.oidc]
 immutable-subject = true
 
+# The security settings `repoutils security-settings` checks or changes.
+# Secret and push protection are free for a public repository and have no
+# effect on CI. CodeQL default setup stays off, as it would add its own checks.
+[tool.repoutils.security-settings]
+private-vulnerability-reporting = false
+dependabot-alerts = true
+dependabot-security-updates = false
+codeql-default-setup = false
+secret-protection = true
+push-protection = true
+
 # The secrets `repoutils secrets` checks the repository has (see AGENTS.md).
 [tool.repoutils.secrets]
 actions = ["AUTOFIX_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "CODECOV_TOKEN", "GH_ACTIONS_TOKEN"]
