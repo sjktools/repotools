@@ -101,7 +101,11 @@ policy = "Split a long file only where that makes the code better."
 exclude = ["pyproject.toml", "*.md"]
 
 [[tool.repoutils.added-strings.strings]]
-string = "if TYPE_CHECKING:"
+string = "TODO"
+
+[[tool.repoutils.added-strings.strings]]
+regex = '^\s*if TYPE_CHECKING\b'
+message = "please double check if `if TYPE_CHECKING:` is actually necessary"
 
 [[tool.repoutils.added-strings.strings]]
 regex = "# type: ?ignore"
@@ -219,6 +223,8 @@ That sample was small (17 documents), and the short-sentence limit rests on less
 `repoutils added-strings` finds the lines the working tree adds since the merge base of `--base` and `HEAD`, and lists the ones that have any of the configured strings.
 Each entry under `strings` gives either `string`, a plain substring, or `regex`, a Python regular expression searched for in each line.
 Its `message` defaults to asking the author to double check that the string is actually necessary.
+A regex can tell code from a string that names it, which a plain substring can't, so tests and docs that mention it don't trip it.
+For example, `^\s*if TYPE_CHECKING\b` matches only the statement, and repoutils' own `pyproject.toml` has one for a `# noqa` comment.
 
 `include` and `exclude` are glob patterns for the paths to search, which a `*` matches across `/`.
 The ones in the table apply to every string, and an entry's own narrow its string further.

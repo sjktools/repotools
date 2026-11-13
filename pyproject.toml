@@ -48,15 +48,22 @@ include = ["*.py"]
 limit = 500
 
 # The strings `repoutils added-strings` points out when a PR adds them, as
-# coding agents often add them where they aren't needed.
+# coding agents often add them where they aren't needed. Regexes, so that a
+# string or test data naming them doesn't match (tests/test_added_strings.py
+# checks them).
 [tool.repoutils.added-strings]
 include = ["*.py"]
 
+# Formatted code has it on a line of its own.
 [[tool.repoutils.added-strings.strings]]
-string = "if TYPE_CHECKING:"
+regex = '^\s*if (typing\.)?TYPE_CHECKING\b'
+message = "please double check if `if TYPE_CHECKING:` is actually necessary"
 
+# A comment, not text inside a one-line string: only whole string literals
+# come before the #. ruff reads noqa case-insensitively, and a bare one too.
 [[tool.repoutils.added-strings.strings]]
-string = "# noqa:"
+regex = '''^(?:[^"'#]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*#\s*(?i:noqa)\b'''
+message = "please double check if `# noqa` is actually necessary"
 
 # The repository settings `repoutils repo-settings` checks or changes.
 [tool.repoutils.repo-settings]

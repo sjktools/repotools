@@ -394,3 +394,43 @@ class MainTests(_GitRepoTestCase):
         code, _, err = self._run(["--base", "main", "--post", "7", "--author", "bot"], request)
         self.assertEqual(code, 1)
         self.assertIn("HTTP 403 from https://x:\nnope", err)
+
+
+class OwnConfigTests(TestCase):
+    """The regexes repoutils' own pyproject.toml gives, which match only code
+    and comments, not strings or test data that name them."""
+
+    @override
+    def setUp(self) -> None:
+        self.type_checking, self.noqa = load_config(Path(__file__).parent.parent).rules
+
+    def test_type_checking(self) -> None:
+        for line in ("if TYPE_CHECKING:", "    if TYPE_CHECKING:", "if typing.TYPE_CHECKING:"):
+            with self.subTest(line):
+                self.assertTrue(self.type_checking.matches(line))
+        for line in ('x = "if TYPE_CHECKING:"', "# if TYPE_CHECKING:", "if TYPE_CHECKING_X:"):
+            with self.subTest(line):
+                self.assertFalse(self.type_checking.matches(line))
+
+    def test_noqa(self) -> None:
+        for line in (
+            "import x  # noqa: F401",
+            "import x  # noqa",
+            "import x  #noqa:F401",
+            "import x  # NOQA: F401",
+            'x = "a#b"  # noqa: E501',
+            "x = 'it\\'s'  # noqa: E501",
+            'x = f"{y}" + "z"  # noqa: E501',
+        ):
+            with self.subTest(line):
+                self.assertTrue(self.noqa.matches(line))
+        for line in (
+            'x = "# noqa: E501"',
+            "x = '# noqa'",
+            'x = "a \\" # noqa"',
+            '"""Docs that mention # noqa."""',
+            "x = 1  # see noqa docs",
+            "# noqanot",
+        ):
+            with self.subTest(line):
+                self.assertFalse(self.noqa.matches(line))
