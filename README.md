@@ -43,6 +43,7 @@ That installs only repoutils, hash-checked against `uv.lock`, and not the projec
 | `dependabot-relock` | Re-locks a Dependabot branch's `uv.lock` with this uv, to exactly Dependabot's versions. |
 | `check-lock-platforms` | Fails if `uv.lock` has wheels for platforms the project doesn't allow. |
 | `post-comment` | Posts a Markdown file to a PR, editing the earlier comment or hiding it with `--hide-previous`. |
+| `added-strings` | Lists the lines a PR adds that have strings `pyproject.toml` configures, such as `# noqa:`, or posts that to a PR, for information only. |
 | `post-patch-coverage` | Posts diff-cover's Markdown patch coverage report to a PR, reformatted. |
 | `wait-for-base-coverage` | Waits for Codecov to have a PR base commit's coverage, so the PR's comparison works. |
 | `post-screenshots` | Uploads a directory of PNGs and posts them to a PR as a comment. |
@@ -94,6 +95,18 @@ exclude = ["*/migrations/*"]
 limit = 500
 limits = { "tests/*" = 700 }
 policy = "Split a long file only where that makes the code better."
+
+# The strings `repoutils added-strings` points out in the lines a PR adds; see below.
+[tool.repoutils.added-strings]
+exclude = ["pyproject.toml", "*.md"]
+
+[[tool.repoutils.added-strings.strings]]
+string = "if TYPE_CHECKING:"
+
+[[tool.repoutils.added-strings.strings]]
+regex = "# type: ?ignore"
+message = "please fix the type error instead, if you can"
+include = ["*.py"]
 
 # The labels that `repoutils labels` checks or creates; color and description are optional.
 [[tool.repoutils.labels]]
@@ -200,6 +213,21 @@ The command still checks the other files and then exits 1, even with `--exit-zer
 
 The defaults for long sentences come from comparing READMEs written before language models with recent machine-written documents.
 That sample was small (17 documents), and the short-sentence limit rests on less still (a few rewrites of this README), so adjust the limits to suit your project.
+
+### Added strings
+
+`repoutils added-strings` finds the lines the working tree adds since the merge base of `--base` and `HEAD`, and lists the ones that have any of the configured strings.
+Each entry under `strings` gives either `string`, a plain substring, or `regex`, a Python regular expression searched for in each line.
+Its `message` defaults to asking the author to double check that the string is actually necessary.
+
+`include` and `exclude` are glob patterns for the paths to search, which a `*` matches across `/`.
+The ones in the table apply to every string, and an entry's own narrow its string further.
+The project's own `pyproject.toml` and docs often name the strings, so leave them out.
+
+The report is for information only, so the command exits 0 whatever it finds.
+It still fails if it can't check, such as on a bad setting, a failed `git` command or a failed request to GitHub.
+With `--post <PR>`, it posts the report only when the PR adds a string.
+If a later push removes them all, it updates the earlier comment to say so, rather than leaving a stale warning.
 
 ### Labels
 

@@ -47,6 +47,17 @@ default-branch = "main"
 include = ["*.py"]
 limit = 500
 
+# The strings `repoutils added-strings` points out when a PR adds them, as
+# coding agents often add them where they aren't needed.
+[tool.repoutils.added-strings]
+include = ["*.py"]
+
+[[tool.repoutils.added-strings.strings]]
+string = "if TYPE_CHECKING:"
+
+[[tool.repoutils.added-strings.strings]]
+string = "# noqa:"
+
 # The repository settings `repoutils repo-settings` checks or changes.
 [tool.repoutils.repo-settings]
 issues = true

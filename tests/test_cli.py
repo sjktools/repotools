@@ -77,6 +77,7 @@ def test_python_dash_m(tmp_path: Path) -> None:
         (["check-sentence-per-line"], "one-sentence-per-line"),
         (["check-whitespace"], "clean whitespace"),
         (["long-files", "--base", ""], "500 lines"),
+        (["added-strings", "--base", "HEAD"], "Strings to double check"),
         (["requirements-min-versions", "check"], "Dependency minimum versions match uv.lock."),
         (["check-lock-platforms"], "uv.lock"),
     ],

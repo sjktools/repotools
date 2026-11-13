@@ -272,6 +272,57 @@ jobs:
         # GITHUB_TOKEN can't look up its own login, so name it.
         run: just long-files --base "$BASE" --commit "$HEAD_SHA" --post "$PR_NUMBER" --author 'github-actions[bot]'
 
+  # Lists the lines a PR adds that have a string pyproject.toml configures (such
+  # as `# noqa:`), for information only, in the job summary and as a
+  # github-actions[bot] comment edited in place. Like long-files: only
+  # same-repo, non-Dependabot PRs post; queued per PR; posts only if HEAD_SHA is
+  # still the PR's head; installs nothing.
+  added-strings:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    concurrency:
+      group: added-strings-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+
+    steps:
+      # The PR's head, so lines and links match the PR's code. Full history
+      # for the merge base with the base branch.
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      # Keep version in step with pyproject.toml's [tool.uv] required-version.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.13.6"
+
+      # Keep just-version in step with the justfile's minimum-version.
+      - name: Install just
+        uses: extractions/setup-just@v4.0.0
+        with:
+          just-version: "1.58.0"
+
+      - name: List added strings
+        env:
+          BASE: origin/${{ github.base_ref }}
+        run: just added-strings --base "$BASE" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Post report to the PR
+        if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE: origin/${{ github.base_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        # GITHUB_TOKEN can't look up its own login, so name it.
+        run: just added-strings --base "$BASE" --commit "$HEAD_SHA" --post "$PR_NUMBER" --author 'github-actions[bot]'
+
   # Checks .github/workflows/actions.lock, which pins every action the
   # workflows use, transitive ones included, to a commit. Generate it with
   # `gh actions-lock` (github/gh-actions-lock) after changing any `uses:`.
