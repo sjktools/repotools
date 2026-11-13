@@ -105,4 +105,12 @@ def main(argv: list[str] | None = None) -> int:
     if args[0] not in COMMANDS:
         print(f"repoutils: unknown command {args[0]!r}\n\n{usage()}", file=sys.stderr)
         return 2
-    return load(args[0])(args[1:])
+    # Imported here, as the commands are, to keep `repoutils --help` fast.
+    from repoutils.config import ConfigError  # noqa: PLC0415
+
+    try:
+        return load(args[0])(args[1:])
+    except ConfigError as error:
+        # Only what pyproject.toml gets wrong: any other error is a bug, and keeps its traceback.
+        print(error, file=sys.stderr)
+        return 1

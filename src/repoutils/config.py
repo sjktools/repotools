@@ -15,7 +15,19 @@ DEFAULT_COMMENT_PREFIX = "repoutils"
 
 
 class ConfigError(ValueError):
-    """``[tool.repoutils]`` has a setting of the wrong type; the message says which."""
+    """``pyproject.toml`` can't be parsed, or ``[tool.repoutils]`` has a setting
+    of the wrong type; the message says which."""
+
+
+def read_pyproject(path: Path) -> dict[str, Any]:
+    """The whole of the ``pyproject.toml`` at path, raising ConfigError, which names it, if it can't be parsed."""
+    try:
+        with path.open("rb") as f:
+            return tomllib.load(f)
+    except tomllib.TOMLDecodeError as error:
+        raise ConfigError(f"{path}: {error}") from error
+    except UnicodeDecodeError as error:
+        raise ConfigError(f"{path}: not valid UTF-8") from error
 
 
 def load(root: Path = Path()) -> dict[str, Any]:
@@ -23,8 +35,7 @@ def load(root: Path = Path()) -> dict[str, Any]:
     path = root / PYPROJECT
     if not path.is_file():
         return {}
-    with path.open("rb") as f:
-        tool = tomllib.load(f).get("tool", {})
+    tool = read_pyproject(path).get("tool", {})
     if not isinstance(tool, dict):
         raise ConfigError(f"{path}: [tool] must be a table")
     table = tool.get("repoutils", {})
