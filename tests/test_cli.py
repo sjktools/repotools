@@ -141,6 +141,98 @@ def test_comment_posters(
     assert "missing" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize(
+    ("args", "config_text", "message", "needs_lock"),
+    [
+        (
+            ["check-prose"],
+            "[tool.repoutils.prose]\nfiles = 'README.md'\n",
+            "[tool.repoutils.prose] files must be a list of strings",
+            False,
+        ),
+        (
+            ["check-sentence-per-line"],
+            "[tool.repoutils.sentence-per-line]\nfiles = 3\n",
+            "[tool.repoutils.sentence-per-line] files must be a list of strings",
+            False,
+        ),
+        (
+            ["check-screenshots-dir"],
+            "[tool.repoutils.screenshots]\ndir = 3\n",
+            "[tool.repoutils.screenshots] dir must be a non-empty string",
+            False,
+        ),
+        (
+            ["check-lock-platforms"],
+            "[tool.repoutils.lock-platforms]\nsupported = 3\n",
+            "[tool.repoutils.lock-platforms] supported must be a list of strings",
+            True,
+        ),
+        (
+            ["post-comment", "1", "report.md", "--name", "x"],
+            "[tool.repoutils]\ncomment-prefix = 3\n",
+            "[tool.repoutils] comment-prefix must be a non-empty string without '-->'",
+            False,
+        ),
+        (
+            ["post-patch-coverage", "1"],
+            "[tool.repoutils]\ncomment-prefix = 3\n",
+            "[tool.repoutils] comment-prefix must be a non-empty string without '-->'",
+            False,
+        ),
+        (
+            ["post-screenshots", "1"],
+            "[tool.repoutils]\ncomment-prefix = 3\n",
+            "[tool.repoutils] comment-prefix must be a non-empty string without '-->'",
+            False,
+        ),
+    ],
+)
+def test_bad_pyproject_setting_prints_one_line_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    args: list[str],
+    config_text: str,
+    message: str,
+    needs_lock: bool,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "pyproject.toml").write_text(config_text)
+    if needs_lock:
+        (tmp_path / "uv.lock").write_text("version = 1\n")
+    assert cli.main(args) == 1
+    err = capsys.readouterr().err
+    assert err == f"{message}\n"
+    assert "Traceback" not in err
+
+
+@pytest.mark.parametrize(
+    ("args", "needs_lock"),
+    [
+        (["check-prose"], False),
+        (["check-sentence-per-line"], False),
+        (["check-screenshots-dir"], False),
+        (["check-lock-platforms"], True),
+        (["post-comment", "1", "report.md", "--name", "x"], False),
+        (["post-patch-coverage", "1"], False),
+        (["post-screenshots", "1"], False),
+    ],
+)
+def test_malformed_pyproject_prints_one_line_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], args: list[str], needs_lock: bool
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "pyproject.toml").write_text("[tool.repoutils\n")
+    if needs_lock:
+        (tmp_path / "uv.lock").write_text("version = 1\n")
+    assert cli.main(args) == 1
+    err = capsys.readouterr().err
+    assert err
+    assert "Traceback" not in err
+    assert len(err.splitlines()) == 1
+
+
 def test_labels(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     # A project with no labels fails before anything talks to GitHub.
     monkeypatch.chdir(tmp_path)

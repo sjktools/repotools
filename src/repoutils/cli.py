@@ -105,4 +105,8 @@ def main(argv: list[str] | None = None) -> int:
     if args[0] not in COMMANDS:
         print(f"repoutils: unknown command {args[0]!r}\n\n{usage()}", file=sys.stderr)
         return 2
-    return load(args[0])(args[1:])
+    try:
+        return load(args[0])(args[1:])
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return 1
