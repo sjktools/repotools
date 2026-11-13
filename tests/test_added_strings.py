@@ -211,6 +211,8 @@ class LoadConfigTests(_GitRepoTestCase):
             "strings = [{ string = 'a', message = '' }]": "strings[0] message must be a non-empty string",
             "strings = [{ string = 'a', include = 'x' }]": "strings[0] include must be a list of strings",
             "strings = [{ string = 'a', strng = 'b' }]": "strings[0] has unknown keys: strng",
+            "strings = [{ string = 'a', name = 'b' }]": "name must be a non-empty string, and only with regex",
+            "strings = [{ regex = 'a', name = '' }]": "name must be a non-empty string, and only with regex",
             "exclude = [1]": "exclude must be a list of strings",
             "string = 'a'": "[tool.repoutils.added-strings] has unknown keys: string",
         }
@@ -225,9 +227,11 @@ class RenderTests(TestCase):
     def test_lists_each_finding_with_links(self) -> None:
         plain = Rule("FIXME", is_regex=False, message=None)
         regex = Rule("skip: ?lint", is_regex=True, message=None)
+        named = Rule("#.*noqa", is_regex=True, message=None, name="# noqa")
         findings = [
             Finding(plain, [Location("src/a b.py", 2, "  b = 2  # FIXME  "), Location("README.md", 9, "   ")]),
             Finding(regex, [Location("src/c.py", 1, "# skip:lint")]),
+            Finding(named, [Location("d.py", 1, "x  # noqa")]),
         ]
         self.assertEqual(
             render(findings, base="origin/main", commit="abc", repo="o/r"),
@@ -246,7 +250,11 @@ class RenderTests(TestCase):
             "- **Warning:** PR adds lines matching `skip: ?lint` (once): "
             "please double check if each is actually necessary\n"
             "\n"
-            "  - [`src/c.py:1`](https://github.com/o/r/blob/abc/src/c.py?plain=1#L1): `# skip:lint`\n",
+            "  - [`src/c.py:1`](https://github.com/o/r/blob/abc/src/c.py?plain=1#L1): `# skip:lint`\n"
+            "\n"
+            "- **Warning:** PR adds `# noqa` (once): please double check if use of `# noqa` is actually necessary\n"
+            "\n"
+            "  - [`d.py:1`](https://github.com/o/r/blob/abc/d.py?plain=1#L1): `x  # noqa`\n",
         )
 
     def test_caps_the_locations_and_long_lines(self) -> None:

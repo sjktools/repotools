@@ -105,7 +105,7 @@ string = "TODO"
 
 [[tool.repoutils.added-strings.strings]]
 regex = '^\s*if TYPE_CHECKING\b'
-message = "please double check if `if TYPE_CHECKING:` is actually necessary"
+name = "if TYPE_CHECKING:"
 
 [[tool.repoutils.added-strings.strings]]
 regex = "# type: ?ignore"
@@ -225,6 +225,7 @@ Each entry under `strings` gives either `string`, a plain substring, or `regex`,
 Its `message` defaults to asking the author to double check that the string is actually necessary.
 A regex can tell code from a string that names it, which a plain substring can't, so tests and docs that mention it don't trip it.
 For example, `^\s*if TYPE_CHECKING\b` matches only the statement, and repoutils' own `pyproject.toml` has one for a `# noqa` comment.
+A regex's `name` is what the report calls its matches in place of the regex.
 
 `include` and `exclude` are glob patterns for the paths to search, which a `*` matches across `/`.
 The ones in the table apply to every string, and an entry's own narrow its string further.

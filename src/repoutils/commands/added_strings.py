@@ -46,6 +46,8 @@ class Rule:
     message: str | None
     include: list[str] = field(default_factory=lambda: ["*"])
     exclude: list[str] = field(default_factory=list)
+    # What the report calls a regex's matches, e.g. "# noqa", or None to show the regex.
+    name: str | None = None
 
     def matches(self, text: str) -> bool:
         return bool(re.search(self.pattern, text)) if self.is_regex else self.pattern in text
@@ -54,15 +56,17 @@ class Rule:
         return _covers(path, self.include, self.exclude)
 
     def describe(self) -> str:
-        """What the PR adds, for the report: "`x`", or "lines matching `x`"."""
-        return f"lines matching {code_span(self.pattern)}" if self.is_regex else code_span(self.pattern)
+        """What the PR adds, for the report: "`x`", or "lines matching `x`" for a regex with no name."""
+        if self.is_regex and self.name is None:
+            return f"lines matching {code_span(self.pattern)}"
+        return code_span(self.name or self.pattern)
 
     def advice(self) -> str:
         if self.message is not None:
             return self.message
-        if self.is_regex:
+        if self.is_regex and self.name is None:
             return "please double check if each is actually necessary"
-        return f"please double check if use of {code_span(self.pattern)} is actually necessary"
+        return f"please double check if use of {self.describe()} is actually necessary"
 
 
 @dataclass(frozen=True)
@@ -96,7 +100,7 @@ def _rule(entry: object, index: int) -> Rule:
     where = f"{TABLE} strings[{index}]"
     if not isinstance(entry, dict):
         raise repoutils_config.ConfigError(f"{where} must be a table")
-    unknown = sorted(set(entry) - {"string", "regex", "message", "include", "exclude"})
+    unknown = sorted(set(entry) - {"string", "regex", "name", "message", "include", "exclude"})
     if unknown:
         raise repoutils_config.ConfigError(f"{where} has unknown keys: {', '.join(unknown)}")
     if ("string" in entry) == ("regex" in entry):
@@ -110,15 +114,18 @@ def _rule(entry: object, index: int) -> Rule:
             re.compile(pattern)
         except re.error as error:
             raise repoutils_config.ConfigError(f"{where} regex {pattern!r} is invalid: {error}") from error
-    message = entry.get("message")
+    message, name = entry.get("message"), entry.get("name")
     if message is not None and not (isinstance(message, str) and message):
         raise repoutils_config.ConfigError(f"{where} message must be a non-empty string")
+    if name is not None and not (is_regex and isinstance(name, str) and name):
+        raise repoutils_config.ConfigError(f"{where} name must be a non-empty string, and only with regex")
     return Rule(
         pattern=pattern,
         is_regex=is_regex,
         message=message,
         include=repoutils_config.string_list(entry, "include", ["*"], where),
         exclude=repoutils_config.string_list(entry, "exclude", [], where),
+        name=name,
     )
 
 

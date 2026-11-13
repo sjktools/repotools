@@ -57,13 +57,13 @@ include = ["*.py"]
 # Formatted code has it on a line of its own.
 [[tool.repoutils.added-strings.strings]]
 regex = '^\s*if (typing\.)?TYPE_CHECKING\b'
-message = "please double check if `if TYPE_CHECKING:` is actually necessary"
+name = "if TYPE_CHECKING:"
 
 # A comment, not text inside a one-line string: only whole string literals
 # come before the #. ruff reads noqa case-insensitively, and a bare one too.
 [[tool.repoutils.added-strings.strings]]
 regex = '''^(?:[^"'#]|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')*#\s*(?i:noqa)\b'''
-message = "please double check if `# noqa` is actually necessary"
+name = "# noqa"
 
 # The repository settings `repoutils repo-settings` checks or changes.
 [tool.repoutils.repo-settings]
