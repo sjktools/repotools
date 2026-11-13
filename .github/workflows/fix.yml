@@ -10,24 +10,21 @@ concurrency:
   group: fix-${{ github.ref }}
 
 jobs:
+  # Runs the branch's own justfile and dev dependencies (on a Dependabot PR,
+  # at their bumped, untrusted versions), so this job never references
+  # AUTOFIX_TOKEN: a runner gets every secret its job uses, and code from an
+  # earlier step could read it from a later one. It hands its commits to the
+  # push job as a Git bundle instead.
   fix:
     runs-on: ubuntu-latest
-    # The push uses AUTOFIX_TOKEN, so GITHUB_TOKEN only needs to read.
     permissions:
       contents: read
       pull-requests: read
     timeout-minutes: 10
+    outputs:
+      head: ${{ steps.commit.outputs.head }}
 
     steps:
-      - name: Check token configuration
-        env:
-          AUTOFIX_TOKEN: ${{ secrets.AUTOFIX_TOKEN }}
-        run: |
-          if [ -z "$AUTOFIX_TOKEN" ]; then
-            echo "::error::AUTOFIX_TOKEN secret is not set"
-            exit 1
-          fi
-
       - name: Find the branch's pull request
         id: check-pr
         env:
@@ -48,7 +45,7 @@ jobs:
           echo "base_branch=$base_branch" >> "$GITHUB_OUTPUT"
 
       # No credentials are kept, as the steps after this run the branch's own
-      # justfile and dependencies; only the final push sees AUTOFIX_TOKEN.
+      # justfile and dependencies.
       - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
@@ -86,13 +83,9 @@ jobs:
       - name: Run fixes
         run: just fix
 
-      # Pushes with AUTOFIX_TOKEN, not GITHUB_TOKEN, so the push triggers CI.
-      # Pushes the merge commit even if `just fix` changed nothing. If the branch
-      # moved since checkout, the push isn't a fast-forward and fails.
-      - name: Commit and push changes
-        env:
-          AUTOFIX_TOKEN: ${{ secrets.AUTOFIX_TOKEN }}
-          BRANCH: ${{ github.ref_name }}
+      # Bundles the merge commit even if `just fix` changed nothing.
+      - name: Commit changes
+        id: commit
         run: |
           git add -u
           if git diff --staged --quiet; then
@@ -103,5 +96,78 @@ jobs:
           if [ "$(git rev-parse HEAD)" = "$GITHUB_SHA" ]; then
             echo "Branch is up to date and needs no fixes"
           else
-            git push "https://x-access-token:${AUTOFIX_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/${BRANCH}"
+            git bundle create "$RUNNER_TEMP/fixes.bundle" "$GITHUB_SHA..HEAD"
+            echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Upload the fixes
+        if: steps.commit.outputs.head
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: fixes
+          path: ${{ runner.temp }}/fixes.bundle
+          retention-days: 1
+
+  # A fresh runner that runs no code from the branch: it checks out the commit
+  # the fix job started from, fetches the bundled commits onto it and pushes
+  # them. AUTOFIX_TOKEN needs only contents write, without the workflows
+  # permission, so a bundle can't change the workflows either.
+  push:
+    needs: fix
+    if: needs.fix.outputs.head
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+
+    steps:
+      - name: Check token configuration
+        env:
+          AUTOFIX_TOKEN: ${{ secrets.AUTOFIX_TOKEN }}
+        run: |
+          if [ -z "$AUTOFIX_TOKEN" ]; then
+            echo "::error::AUTOFIX_TOKEN secret is not set"
+            exit 1
+          fi
+
+      # Full history: the bundle holds what the merge brought in from the base
+      # branch, but assumes the commits where the two branches diverged, which
+      # may be far back in this branch's history.
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download the fixes
+        uses: actions/download-artifact@v8.0.2
+        with:
+          name: fixes
+          path: ${{ runner.temp }}/fixes
+
+      # Pushes with AUTOFIX_TOKEN, not GITHUB_TOKEN, so the push triggers CI.
+      # The lease makes the push fail unless the branch is still at the commit
+      # the fix job started from: a plain push would also succeed if the branch
+      # had since been reset to an ancestor, and restore the commits removed.
+      # No hooks run, as core.hooksPath is empty.
+      - name: Push the fixes
+        env:
+          AUTOFIX_TOKEN: ${{ secrets.AUTOFIX_TOKEN }}
+          BRANCH: ${{ github.ref_name }}
+          HEAD_SHA: ${{ needs.fix.outputs.head }}
+        run: |
+          bundle="$RUNNER_TEMP/fixes/fixes.bundle"
+          git bundle verify "$bundle"
+          git fetch --no-tags "$bundle" HEAD
+          if [ "$(git rev-parse FETCH_HEAD)" != "$HEAD_SHA" ]; then
+            echo "::error::The bundle's head isn't the commit the fix job made."
+            exit 1
+          fi
+          # The lease makes the push a forced one, so check it only adds commits.
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" "$HEAD_SHA"; then
+            echo "::error::The bundle's head doesn't descend from the commit the fix job started from."
+            exit 1
+          fi
+          git -c core.hooksPath=/dev/null push \
+            "--force-with-lease=refs/heads/${BRANCH}:${GITHUB_SHA}" \
+            "https://x-access-token:${AUTOFIX_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "${HEAD_SHA}:refs/heads/${BRANCH}"

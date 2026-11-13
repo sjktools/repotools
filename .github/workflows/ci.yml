@@ -303,31 +303,29 @@ jobs:
       - name: Verify actions.lock
         run: '"$RUNNER_TEMP/gh-actions-lock" --verify'
 
-  # Runs on a Dependabot branch, whose bumped dependency we don't trust, so the
-  # write-capable DEPENDABOT_FIX_TOKEN is only exposed to the final push step:
-  # checkout doesn't persist credentials, and nothing installs the project or its
-  # dependencies (the recipes run repoutils from source with the standard
-  # library). GITHUB_TOKEN is read-only on Dependabot runs whatever this job asks
-  # for, so ask for read. The run its push triggers checks the fixed commit.
+  # Runs on a Dependabot branch, whose bumped dependency we don't trust:
+  # checkout doesn't persist credentials, and nothing installs the project or
+  # its dependencies (the recipes run repoutils from source with the standard
+  # library), but `uv lock` may still build a bumped sdist to read its metadata.
+  # So this job never references the write-capable DEPENDABOT_FIX_TOKEN (a
+  # runner gets every secret its job uses, and code from an earlier step could
+  # read it from a later one), and hands its commit to dependabot-push as a Git
+  # bundle. GITHUB_TOKEN is read-only on Dependabot runs whatever this job asks
+  # for, so ask for read. The run the push triggers checks the fixed commit.
   dependabot-fix:
     if: github.event_name == 'pull_request' && github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      head: ${{ steps.commit.outputs.head }}
 
     steps:
-      - name: Check token configuration
-        env:
-          DEPENDABOT_FIX_TOKEN: ${{ secrets.DEPENDABOT_FIX_TOKEN }}
-        run: |
-          if [ -z "$DEPENDABOT_FIX_TOKEN" ]; then
-            echo "DEPENDABOT_FIX_TOKEN secret is not set" >&2
-            exit 1
-          fi
-
+      # The PR head from the event, which dependabot-push checks the fix is a
+      # single commit on, not the branch, which may have moved since.
       - uses: actions/checkout@v7.0.1
         with:
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.event.pull_request.head.sha }}
           # Fetch the base branch and history too, for dependabot-relock's merge base.
           fetch-depth: 0
           persist-credentials: false
@@ -357,24 +355,101 @@ jobs:
       - name: Update lockfile
         run: uv lock
 
-      # Pushes with DEPENDABOT_FIX_TOKEN, not GITHUB_TOKEN, so the push triggers a
-      # new workflow run. If Dependabot updates the branch after checkout, the push
-      # fails; the run Dependabot's push triggers redoes the fix.
-      - name: Commit and push if needed
-        env:
-          DEPENDABOT_FIX_TOKEN: ${{ secrets.DEPENDABOT_FIX_TOKEN }}
-          HEAD_REF: ${{ github.head_ref }}
-          REPOSITORY: ${{ github.repository }}
+      - name: Commit if needed
+        id: commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          start="$(git rev-parse HEAD)"
           git add pyproject.toml uv.lock
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
             git commit -m "chore: re-lock with pinned uv and sync dependency minimum versions"
-            git push "https://x-access-token:${DEPENDABOT_FIX_TOKEN}@github.com/${REPOSITORY}.git" "HEAD:refs/heads/${HEAD_REF}"
+            git bundle create "$RUNNER_TEMP/dependabot-fix.bundle" "$start..HEAD"
+            echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Upload the fix
+        if: steps.commit.outputs.head
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: dependabot-fix
+          path: ${{ runner.temp }}/dependabot-fix.bundle
+          retention-days: 1
+
+  # A fresh runner that runs no code from the Dependabot branch: it checks out
+  # the PR head, fetches the bundled commit onto it, checks it changes only
+  # pyproject.toml and uv.lock, and pushes it. DEPENDABOT_FIX_TOKEN needs only
+  # contents write, without the workflows permission, so a bundle can't change
+  # the workflows either.
+  dependabot-push:
+    needs: dependabot-fix
+    if: needs.dependabot-fix.outputs.head
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 5
+
+    steps:
+      - name: Check token configuration
+        env:
+          DEPENDABOT_FIX_TOKEN: ${{ secrets.DEPENDABOT_FIX_TOKEN }}
+        run: |
+          if [ -z "$DEPENDABOT_FIX_TOKEN" ]; then
+            echo "DEPENDABOT_FIX_TOKEN secret is not set" >&2
+            exit 1
+          fi
+
+      # The PR head from the event, not a dependabot-fix output, which code
+      # from the branch could have set.
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Download the fix
+        uses: actions/download-artifact@v8.0.2
+        with:
+          name: dependabot-fix
+          path: ${{ runner.temp }}/dependabot-fix
+
+      # Pushes with DEPENDABOT_FIX_TOKEN, not GITHUB_TOKEN, so the push triggers a
+      # new workflow run. The lease makes the push fail unless the branch is still
+      # at the PR head this run started from; if Dependabot has updated it, the
+      # run Dependabot's push triggers redoes the fix. No hooks run, as
+      # core.hooksPath is empty.
+      - name: Push the fix
+        env:
+          DEPENDABOT_FIX_TOKEN: ${{ secrets.DEPENDABOT_FIX_TOKEN }}
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_SHA: ${{ needs.dependabot-fix.outputs.head }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          bundle="$RUNNER_TEMP/dependabot-fix/dependabot-fix.bundle"
+          git bundle verify "$bundle"
+          git fetch --no-tags "$bundle" HEAD
+          if [ "$(git rev-parse FETCH_HEAD)" != "$HEAD_SHA" ]; then
+            echo "::error::The bundle's head isn't the commit dependabot-fix made."
+            exit 1
+          fi
+          # dependabot-fix ran the bumped dependency's build code, so take only
+          # what it is meant to change: one commit on the PR head, touching
+          # nothing but pyproject.toml and uv.lock.
+          if [ "$(git rev-parse "FETCH_HEAD^@")" != "$(git rev-parse HEAD)" ]; then
+            echo "::error::The bundle isn't a single commit on the PR head."
+            exit 1
+          fi
+          if ! git diff --quiet HEAD FETCH_HEAD -- . ':(exclude)pyproject.toml' ':(exclude)uv.lock'; then
+            echo "::error::The bundle changes files other than pyproject.toml and uv.lock:"
+            git diff --name-only HEAD FETCH_HEAD -- . ':(exclude)pyproject.toml' ':(exclude)uv.lock'
+            exit 1
+          fi
+          git -c core.hooksPath=/dev/null push \
+            "--force-with-lease=refs/heads/${HEAD_REF}:${PR_HEAD_SHA}" \
+            "https://x-access-token:${DEPENDABOT_FIX_TOKEN}@github.com/${REPOSITORY}.git" \
+            "${HEAD_SHA}:refs/heads/${HEAD_REF}"
 
   # Tagging and releasing need a write-capable token, so they run in their own
   # job, only for pushes to main, and never alongside pull request code.
