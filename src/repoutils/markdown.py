@@ -8,6 +8,7 @@ not as a full CommonMark parser.
 import re
 from collections.abc import Iterator
 from dataclasses import dataclass
+from pathlib import Path
 
 # A code span: a run of backticks, then the shortest text up to a run of the same length; an unmatched run is literal.
 INLINE_CODE_RE = re.compile(r"(?<!`)(`+)(?!`)(.+?)(?<!`)\1(?!`)")
@@ -58,6 +59,20 @@ class Sentence:
     line: int
     text: str
     in_list: bool = False
+
+
+class UnreadableError(Exception):
+    """A file couldn't be read; its message is the line to report, ``<path>: cannot read (<reason>)``."""
+
+
+def read_text(path: str) -> str:
+    """The file's text, as UTF-8; raises `UnreadableError` if it can't be opened or isn't valid UTF-8."""
+    try:
+        return Path(path).read_text(encoding="utf-8")
+    except UnicodeDecodeError as error:
+        raise UnreadableError(f"{path}: cannot read (not valid UTF-8)") from error
+    except OSError as error:
+        raise UnreadableError(f"{path}: cannot read ({error.strerror or error})") from error
 
 
 def fence_marker(line: str) -> tuple[str, int] | None:

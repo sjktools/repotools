@@ -2,6 +2,8 @@
 
 The files are ``[tool.repoutils.prose]``'s ``files`` (default ``AGENTS.md``
 and ``README.md``), or the ones given; a missing configured file is skipped.
+A file that can't be read (one that isn't valid UTF-8, for example) is
+reported, and fails the check even with ``--exit-zero``.
 
 It measures each file's prose sentences (see ``repoutils.markdown``) and fails
 a file whose rate is over a limit. The limits are on a whole file's rates and
@@ -26,7 +28,7 @@ from pathlib import Path
 from typing import Literal
 
 from repoutils import config
-from repoutils.markdown import Sentence, prose_sentences, words
+from repoutils.markdown import Sentence, UnreadableError, prose_sentences, read_text, words
 
 WHERE = "[tool.repoutils.prose]"
 DEFAULT_FILES = ["AGENTS.md", "README.md"]
@@ -197,8 +199,15 @@ def main(paths: list[str] | None = None, *, exit_zero: bool = False, show_stats:
     if paths is None:
         paths = [path for path in files() if Path(path).is_file()]
     failed = []
+    unreadable = False
     for path in paths:
-        sentences = prose_sentences(Path(path).read_text(encoding="utf-8"))
+        try:
+            sentences = prose_sentences(read_text(path))
+        except UnreadableError as error:
+            print(error)
+            failed.append(path)
+            unreadable = True
+            continue
         # No sentences means no rates, whatever min-sentences is.
         if len(sentences) < max(min_sentences, 1):
             # Its rates are still worth seeing, though no limit applies to them.
@@ -213,14 +222,18 @@ def main(paths: list[str] | None = None, *, exit_zero: bool = False, show_stats:
         print("No files to check.")
     if failed:
         print(f"Prose check failed: {', '.join(failed)}.")
-        return 0 if exit_zero else 1
-    return 0
+    # A file that couldn't be read wasn't checked, so --exit-zero doesn't cover it.
+    return 1 if unreadable or (failed and not exit_zero) else 0
 
 
 def run(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(prog="repoutils check-prose", description=__doc__.splitlines()[0])
     parser.add_argument("files", nargs="*", metavar="FILE", help=f"files to check (default: {WHERE}'s files)")
-    parser.add_argument("--exit-zero", action="store_true", help="report, but exit 0 even if a file is over a limit")
+    parser.add_argument(
+        "--exit-zero",
+        action="store_true",
+        help="report, but exit 0 even if a file is over a limit (not if one can't be read)",
+    )
     parser.add_argument("--stats", action="store_true", help="print every rate for every file, not only those over")
     args = parser.parse_args(argv)
     for path in args.files:
