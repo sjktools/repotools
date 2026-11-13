@@ -264,4 +264,3 @@ def prose_sentences(text: str) -> list[Sentence]:
         for sentence in _split(block, in_list)
         if _SENTENCE_END_RE.search(sentence.text) and len(words(sentence.text)) >= MIN_WORDS
     ]
-import os  # noqa: F401  (temporary, to trigger the added-strings comment; reverted next commit)
