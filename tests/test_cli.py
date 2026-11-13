@@ -222,6 +222,9 @@ def test_bad_pyproject_setting_prints_one_line_error(
         (["post-comment", "1", "report.md", "--name", "x"], False),
         (["post-patch-coverage", "1"], False),
         (["post-screenshots", "1"], False),
+        # These read other tables of pyproject.toml, not [tool.repoutils].
+        (["check-pins"], False),
+        (["requirements-min-versions", "check"], True),
     ],
 )
 @pytest.mark.parametrize(

@@ -10,6 +10,8 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
+from repoutils import config
+
 
 def _normalize_package_name(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
@@ -147,10 +149,11 @@ def _fix(mismatches: list[_Mismatch], pyproject_path: Path, pyproject_text: str)
 
 
 def main(mode: str) -> int:
-    pyproject_path = Path("pyproject.toml")
+    pyproject_path = Path(config.PYPROJECT)
+    pyproject = config.read_pyproject(pyproject_path)
     pyproject_text = pyproject_path.read_text(encoding="utf-8")
     try:
-        mismatches = _find_mismatches(_dependency_groups(tomllib.loads(pyproject_text)), _parse_locked_versions())
+        mismatches = _find_mismatches(_dependency_groups(pyproject), _parse_locked_versions())
     except _LockError as exc:
         print(exc, file=sys.stderr)
         return 1

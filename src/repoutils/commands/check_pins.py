@@ -7,8 +7,9 @@ import argparse
 import itertools
 import re
 import sys
-import tomllib
 from pathlib import Path
+
+from repoutils import config
 
 # (action, the `with:` input that pins its version)
 UV = ("astral-sh/setup-uv", "version")
@@ -114,8 +115,7 @@ def workflow_files(root: Path) -> list[Path]:
 
 
 def minimums(root: Path) -> dict[tuple[str, str], str]:
-    with (root / "pyproject.toml").open("rb") as f:
-        required = tomllib.load(f)["tool"]["uv"]["required-version"]
+    required = config.read_pyproject(root / config.PYPROJECT)["tool"]["uv"]["required-version"]
     if not required.startswith(">="):
         raise ValueError(f"[tool.uv] required-version {required!r} isn't of the form >=X.Y.Z")
     match = _JUST_MIN_RE.search((root / "justfile").read_text())
