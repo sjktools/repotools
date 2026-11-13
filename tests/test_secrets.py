@@ -177,7 +177,8 @@ def test_http_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pyt
     (tmp_path / "pyproject.toml").write_text(CONFIG)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
-    assert secrets.main(["check", "--repo", "o/r"]) == 1
+    # --exit-zero ignores missing secrets, but not an error.
+    assert secrets.main(["check", "--exit-zero", "--repo", "o/r"]) == 1
     assert "HTTP 403 from" in capsys.readouterr().err
 
 

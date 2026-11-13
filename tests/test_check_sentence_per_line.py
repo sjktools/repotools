@@ -56,11 +56,11 @@ class CheckSentencePerLineTests(TestCase):
             ],
         )
 
-    def _run(self, files: dict[str, str]) -> tuple[int, str]:
+    def _run(self, files: dict[str, str | bytes]) -> tuple[int, str]:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp)
             for name, contents in files.items():
-                (path / name).write_text(contents, encoding="utf-8")
+                (path / name).write_bytes(contents.encode() if isinstance(contents, str) else contents)
             stdout = io.StringIO()
             with contextlib.chdir(path), contextlib.redirect_stdout(stdout):
                 code = sentence_per_line_main()
@@ -70,6 +70,18 @@ class CheckSentencePerLineTests(TestCase):
         code, stdout = self._run({"AGENTS.md": "One sentence.\n", "README.md": "Another sentence.\n"})
         self.assertEqual(code, 0)
         self.assertIn("one-sentence-per-line formatting", stdout)
+
+    def test_main_reports_a_file_it_cannot_read_and_checks_the_rest(self) -> None:
+        code, stdout = self._run({"AGENTS.md": b"Caf\xe9.\n", "README.md": "One sentence. Another sentence.\n"})
+        self.assertEqual(code, 1)
+        self.assertEqual(
+            stdout.splitlines(),
+            [
+                "One-sentence-per-line check failed:",
+                "- AGENTS.md: cannot read (not valid UTF-8)",
+                "- README.md:1: sentence boundary mid-line: One sentence. Another sentence.",
+            ],
+        )
 
     def test_main_reports_failures(self) -> None:
         code, stdout = self._run(

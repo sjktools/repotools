@@ -41,6 +41,12 @@ To add a command:
 3. Add its tests, and a case in `tests/test_cli.py` if it needs one.
 4. Add it to the table in `README.md`.
 
+A command that enforces a rule can take `--exit-zero`, which makes it report what breaks the rule but exit 0.
+The option forgives a broken rule and nothing else.
+If the command can't tell whether the rule holds, it still exits non-zero, as it does without the option.
+That covers a file it can't read, a bad setting in `pyproject.toml`, and a failed request to GitHub.
+Give a new `--exit-zero` a test that an error still fails with it.
+
 A command that posts a PR comment finds its earlier comment by a hidden marker, `<!-- <comment-prefix>-<name> -->`.
 `comment-prefix` comes from `[tool.repoutils]` (default `repoutils`), so projects that switch from their own scripts keep finding the comments those posted.
 

@@ -180,6 +180,9 @@ Under each limit that a file is over, the command lists the five sentences that 
 The two limits on long sentences share one list, under the first of them that the file is over.
 `--stats` prints every rate for every file, and `--exit-zero` reports the same but exits 0.
 
+A file that can't be read, such as one that isn't valid UTF-8, is reported on one line as `<file>: cannot read (<reason>)`.
+The command still checks the other files and then exits 1, even with `--exit-zero`, and `check-sentence-per-line` treats such a file the same way.
+
 The defaults for long sentences come from comparing READMEs written before language models with recent machine-written documents.
 That sample was small (17 documents), and the short-sentence limit rests on less still (a few rewrites of this README), so adjust the limits to suit your project.
 
