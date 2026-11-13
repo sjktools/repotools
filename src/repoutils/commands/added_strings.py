@@ -1,4 +1,4 @@
-"""List the configured strings a PR adds, such as `# noqa:`, in a Markdown report.
+"""List the lines a PR adds that have any of the configured strings, in a Markdown report.
 
 It prints the report, or posts it to a PR as a comment, editing the one posted
 before.
