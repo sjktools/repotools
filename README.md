@@ -51,10 +51,11 @@ That installs only repoutils, hash-checked against `uv.lock`, and not the projec
 | `repo-settings` | Checks or changes the repository settings `pyproject.toml` gives, or prints the ones the repository has. |
 | `rulesets` | Checks, creates or updates the branch rulesets `pyproject.toml` defines, or prints the ones the repository has. |
 | `environments` | Checks, creates or updates the deployment environments `pyproject.toml` defines, or prints the ones the repository has. |
+| `actions-settings` | Checks or changes the Actions settings `pyproject.toml` gives, or prints the ones the repository has. |
 | `secrets` | Checks the repository has the Actions and Dependabot secrets `pyproject.toml` names, or prints the names it has. Also checks the workflows use exactly those secrets. |
 | `check-attestations` | Fails unless every distribution in `dist/` has a PEP 740 publish attestation. |
 
-The commands that post to a PR need a GitHub token, and so do `labels`, `repo-settings`, `rulesets`, `environments` and `secrets`.
+The commands that post to a PR need a GitHub token, and so do `labels`, `repo-settings`, `actions-settings`, `rulesets`, `environments` and `secrets`.
 They read `$GITHUB_TOKEN`, and fall back to `gh auth token`.
 
 ## Configuration
@@ -113,6 +114,13 @@ squash-merge = { allow = true, title = "pr-title", message = "pr-body" }
 merge-commit.allow = false
 rebase-merge.allow = false
 delete-branch-on-merge = true
+
+# The Actions settings that `repoutils actions-settings` checks or changes (see below).
+[tool.repoutils.actions-settings]
+allowed-actions = "all"
+require-sha-pinning = true
+default-token-permissions = "read"
+oidc.immutable-subject = true
 
 # A branch ruleset `repoutils rulesets` checks or creates, giving only what isn't a default; see below.
 [tool.repoutils.rulesets.main]
@@ -255,6 +263,53 @@ The `GITHUB_TOKEN` that GitHub Actions provides can't be given that permission.
 `repoutils repo-settings dump` prints every setting in the table above with the value the repository has for it.
 The output is a `[tool.repoutils.repo-settings]` table with a sub-table for each merge method.
 Paste it into `pyproject.toml` and trim it down to the settings you want to keep the same.
+If you paste it in unchanged, `check` passes.
+`dump` neither reads nor changes `pyproject.toml`.
+If GitHub doesn't return a setting, or returns a value the table can't express, `dump` leaves it out and says so on stderr.
+
+### Actions settings
+
+`[tool.repoutils.actions-settings]` covers the repository's Actions settings page (Settings, Actions, General).
+It works like `[tool.repoutils.repo-settings]`.
+All of its settings are optional, but `check` and `ensure` fail if the table doesn't set any.
+A setting the table leaves out stays as it is on GitHub.
+
+| Setting | Values | On GitHub |
+|---|---|---|
+| `allowed-actions` | `"all"`, `"owner"`, `"selected"` or `"disabled"` | Which actions and reusable workflows may run: all, only the owner's, the ones `selected-actions` gives, or none (Actions is off). |
+| `require-sha-pinning` | `true` or `false` | Require actions to be pinned to a full-length commit SHA. |
+| `selected-actions.github-owned` | `true` or `false` | Allow actions created by GitHub. |
+| `selected-actions.verified-creators` | `true` or `false` | Allow actions by Marketplace verified creators. |
+| `selected-actions.patterns` | a list of strings | The other actions and reusable workflows allowed, such as `"astral-sh/*"`, in any order. |
+| `default-token-permissions` | `"read"` or `"write"` | The `GITHUB_TOKEN`'s default permissions: read only, or read and write. |
+| `can-approve-pull-requests` | `true` or `false` | Allow GitHub Actions to create and approve pull requests. |
+| `fork-pr-approval` | `"first-time-contributors-new-to-github"`, `"first-time-contributors"` or `"all-external-contributors"` | Which outside contributors need approval before their fork's pull request runs workflows. |
+| `retention-days` | a positive integer | How many days checks, workflow runs, commit statuses, artifacts and logs are kept. |
+| `cache-retention-days` | a positive integer | How many days an unused cache is kept. |
+| `cache-size-gb` | a positive integer | How many gigabytes of caches the repository keeps before evicting the oldest. |
+| `oidc.use-default-subject` | `true` or `false` | Use the default template for the OIDC token's subject claim. |
+| `oidc.include-claim-keys` | a list of strings | The claims a custom subject template joins, in order, which needs `oidc.use-default-subject = false`. |
+| `oidc.immutable-subject` | `true` or `false` | Use the immutable subject claim, based on the repository's ID rather than its name. |
+
+The `selected-actions` settings need `allowed-actions = "selected"`, as GitHub only has them then.
+
+`repoutils actions-settings ensure` changes every setting that differs, with one request for each part of the page that needs one.
+It fails if GitHub doesn't apply one of them.
+An organization's policy can lock some settings, such as the `GITHUB_TOKEN`'s write permission.
+GitHub refuses a change to a locked setting with an HTTP 409 error, and `ensure` reports it.
+Some settings don't apply to every repository, such as fork pull request approval on a private one.
+GitHub answers those with HTTP 404, so `check` and `ensure` fail if the table sets one, and `dump` leaves it out.
+
+`repoutils actions-settings check` changes nothing, and fails in exactly the cases where `ensure` would change something.
+`--exit-zero` works the same way as it does for `labels check`.
+
+`check` and `dump` need a token with read access to the repository's administration settings, and to its Actions for the `oidc` settings.
+For a fine-grained token, that's the Administration and Actions read permissions, and `ensure` needs both as write permissions.
+The `GITHUB_TOKEN` that GitHub Actions provides can't be given the Administration permission.
+
+`repoutils actions-settings dump` prints every setting in the table above with the value the repository has for it.
+It leaves out `selected-actions` unless `allowed-actions` is `"selected"`, and `oidc.include-claim-keys` with the default template.
+Paste the output into `pyproject.toml` and trim it down to the settings you want to keep the same.
 If you paste it in unchanged, `check` passes.
 `dump` neither reads nor changes `pyproject.toml`.
 If GitHub doesn't return a setting, or returns a value the table can't express, `dump` leaves it out and says so on stderr.
