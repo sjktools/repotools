@@ -130,7 +130,9 @@ jobs:
             exit 1
           fi
 
-      # The base branch's history too, which the merge commit's bundle assumes.
+      # Full history: the bundle holds what the merge brought in from the base
+      # branch, but assumes the commits where the two branches diverged, which
+      # may be far back in this branch's history.
       - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0

@@ -389,6 +389,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    timeout-minutes: 5
 
     steps:
       - name: Check token configuration
