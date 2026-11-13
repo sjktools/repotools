@@ -297,6 +297,8 @@ The `selected-actions` settings need `allowed-actions = "selected"`, as GitHub o
 It fails if GitHub doesn't apply one of them.
 An organization's policy can lock some settings, such as the `GITHUB_TOKEN`'s write permission.
 GitHub refuses a change to a locked setting with an HTTP 409 error, and `ensure` reports it.
+Some settings don't apply to every repository, such as fork pull request approval on a private one.
+GitHub answers those with HTTP 404, so `check` and `ensure` fail if the table sets one, and `dump` leaves it out.
 
 `repoutils actions-settings check` changes nothing, and fails in exactly the cases where `ensure` would change something.
 `--exit-zero` works the same way as it does for `labels check`.

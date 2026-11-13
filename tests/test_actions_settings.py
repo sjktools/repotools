@@ -245,7 +245,7 @@ def test_ensure_cant_check_the_result(
             and ("PUT", OIDC.path) in [(m, path) for m, path, _ in gh.calls]
             and url.endswith(WORKFLOW.path)
         ):
-            del response["default_workflow_permissions"]
+            response.clear()
         return response
 
     assert _run(tmp_path, monkeypatch, request, ["ensure"]) == 1
@@ -261,7 +261,7 @@ def test_no_settings_defined(
     assert "No Actions settings are defined" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("code", [403, 409])
+@pytest.mark.parametrize("code", [403, 404, 409])
 def test_http_error_fails_even_with_exit_zero(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], code: int
 ) -> None:
@@ -273,6 +273,7 @@ def test_http_error_fails_even_with_exit_zero(
     err = capsys.readouterr().err
     assert err.startswith(f"HTTP {code} from https://x:\nnope")
     assert ("organization policy" in err) == (code == 409)
+    assert ("doesn't apply to the repository" in err) == (code == 404)
 
 
 TABLE = "[tool.repoutils.actions-settings]\n"
@@ -449,3 +450,20 @@ def test_gh_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pyt
     monkeypatch.setattr(github, "gh_output", gh_output)
     assert actions_settings.main(["check"]) == 1
     assert capsys.readouterr().err == "gh auth token failed:\nnot logged in\n"
+
+
+def test_a_field_github_leaves_out_is_a_difference() -> None:
+    # With the default template, GitHub may leave out the claim keys.
+    settings = {BY_KEY["oidc.use-default-subject"]: False, BY_KEY["oidc.include-claim-keys"]: ["repo"]}
+    body, changes = actions_settings.diff(settings, {"use_default": True})
+    assert body == {"use_default": False, "include_claim_keys": ["repo"]}
+    assert changes == [
+        "oidc.use-default-subject is True on GitHub, not False",
+        "oidc.include-claim-keys is unset on GitHub, not ['repo']",
+    ]
+
+
+def test_dump_doesnt_miss_claim_keys_with_the_default_template() -> None:
+    text, skipped = actions_settings.dump_toml({OIDC: {"use_default": True, "use_immutable_subject": True}})
+    assert "use-default-subject = true\n" in text
+    assert skipped == []

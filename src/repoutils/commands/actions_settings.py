@@ -233,7 +233,13 @@ def diff(settings: dict[Setting, Any], response: dict[str, Any] | None) -> tuple
         try:
             theirs = setting.read(response)
         except KeyError as e:
-            missing.append(str(e.args[0]))
+            if not response:
+                missing.append(str(e.args[0]))
+            else:
+                # GitHub leaves out some fields it has no value for, such as
+                # the claim keys with the default template.
+                writes.update(setting.write(ours))
+                changes.append(f"{setting.key} is unset on GitHub, not {ours!r}")
             continue
         if not setting.same(theirs, ours):
             writes.update(setting.write(ours))
@@ -309,7 +315,7 @@ def dump_toml(responses: Mapping[Endpoint, dict[str, Any] | None]) -> tuple[str,
     TABLE can't give. responses has None for an endpoint GitHub didn't give,
     whose settings are left out without a note."""
     values: dict[str, Any] = {}
-    skipped: list[str] = []
+    skipped: dict[str, str] = {}
     for setting in SETTINGS:
         response = responses.get(setting.endpoint)
         if response is None:
@@ -317,15 +323,16 @@ def dump_toml(responses: Mapping[Endpoint, dict[str, Any] | None]) -> tuple[str,
         try:
             value = setting.read(response)
         except KeyError:
-            skipped.append(f"{setting.key}: GitHub didn't return {setting.api_field}")
+            skipped[setting.key] = f"GitHub didn't return {setting.api_field}"
             continue
         if setting.problem(value) is not None:
-            skipped.append(f"{setting.key}: GitHub's value {value!r} isn't one {TABLE} can give")
+            skipped[setting.key] = f"GitHub's value {value!r} isn't one {TABLE} can give"
             continue
         values[setting.key] = value
     if values.get("oidc.use-default-subject") is not False:
-        # GitHub ignores them, and check would refuse them.
+        # GitHub ignores them, and check would refuse them, so they aren't missed.
         values.pop("oidc.include-claim-keys", None)
+        skipped.pop("oidc.include-claim-keys", None)
     if values.get("allowed-actions") != "selected":
         for key in [key for key in values if key.startswith("selected-actions.")]:
             del values[key]
@@ -336,7 +343,7 @@ def dump_toml(responses: Mapping[Endpoint, dict[str, Any] | None]) -> tuple[str,
         (tables[table] if table else top).append(f"{name} = {config.toml_value(value)}\n")
     sections = [f"{TABLE}\n" + "".join(top)]
     sections += [f"{TABLE[:-1]}.{table}]\n" + "".join(lines) for table, lines in tables.items() if lines]
-    return "\n".join(sections), skipped
+    return "\n".join(sections), [f"{key}: {note}" for key, note in skipped.items()]
 
 
 def dump(repo: str, token: str) -> int:
@@ -417,8 +424,12 @@ def main(argv: list[str]) -> int:
     except urllib.error.HTTPError as e:
         with e:
             detail = e.read().decode(errors="replace")
-        # 409 is how GitHub refuses a change the organization's policy forbids.
-        hint = "\n(GitHub refuses a change an organization policy forbids with 409.)" if e.code == 409 else ""
+        hints = {
+            404: "GitHub returns 404 for a setting that doesn't apply to the repository, "
+            "or a repository the token can't see.",
+            409: "GitHub refuses a change an organization policy forbids with 409.",
+        }
+        hint = f"\n({hints[e.code]})" if e.code in hints else ""
         print(f"HTTP {e.code} from {e.filename}:\n{detail}{hint}", file=sys.stderr)
         return 1
     except (OSError, ValueError, RuntimeError) as e:
