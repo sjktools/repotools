@@ -242,7 +242,8 @@ def test_other_http_errors_propagate(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     monkeypatch.setattr(github, "request", request)
-    assert rulesets.main(["check", "--repo", "o/r"]) == 1
+    # --exit-zero ignores rulesets needing ensure, but not an error.
+    assert rulesets.main(["check", "--exit-zero", "--repo", "o/r"]) == 1
     assert capsys.readouterr().err == f"HTTP 500 from {API}/apps/github-actions:\nboom\n"
 
 

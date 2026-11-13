@@ -206,6 +206,9 @@ def test_rejects_bad_settings(project: Path) -> None:
     _configure(project, 'max-commas-per-sentence = "few"\n')
     with pytest.raises(config.ConfigError, match=r"\[tool.repoutils.prose\] max-commas-per-sentence must be a number"):
         check_prose.main()
+    # --exit-zero ignores a file over a limit, but not an error.
+    with pytest.raises(config.ConfigError):
+        check_prose.run(["--exit-zero"])
     _configure(project, "long-sentence-words = 30.9\n")
     with pytest.raises(config.ConfigError, match="long-sentence-words must be a whole number, 0 or more$"):
         check_prose.main()
