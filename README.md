@@ -434,6 +434,7 @@ Turning on `dependabot-alerts` also turns on the dependency graph.
 
 Some settings need others.
 Dependabot security updates need Dependabot alerts, and push protection needs secret protection.
+The table can't turn one on while turning the one it needs off.
 `ensure` turns settings off before it turns any on, and does each in an order that respects this.
 
 `repoutils security-settings ensure` changes every setting that differs, then reads them all back.

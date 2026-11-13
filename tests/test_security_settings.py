@@ -35,7 +35,8 @@ def _http_error(url: str, code: int) -> urllib.error.HTTPError:
 class FakeGitHub:
     """Answers github.request like GitHub's API for o/r would, with state
     holding each setting by its key. A key in ignored isn't changed by a write,
-    and refused maps a path to the HTTP status GitHub refuses it with."""
+    and refused maps a path, or a method and path such as "PUT x", to
+    the HTTP status GitHub refuses it with."""
 
     def __init__(
         self,
@@ -64,8 +65,9 @@ class FakeGitHub:
         assert url.startswith(URL)
         path = url[len(URL) :].lstrip("/")
         self.calls.append((method, path, json_body))
-        if path in self.refused:
-            raise _http_error(url, self.refused[path])
+        for refused in (path, f"{method} {path}"):
+            if refused in self.refused:
+                raise _http_error(url, self.refused[refused])
         if path == "":
             return self._repo(method, json_body)
         for key, toggle in TOGGLES.items():
@@ -276,8 +278,9 @@ def test_ensure_reports_a_refused_change(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     gh = FakeGitHub(ALL_OFF)
-    gh.refused = {"vulnerability-alerts": 422}
+    gh.refused = {"PUT vulnerability-alerts": 422}
     assert _run(tmp_path, monkeypatch, gh, ["ensure"]) == 1
+    assert gh.writes() == [("PUT", "vulnerability-alerts", None)]
     assert "HTTP 422 from" in capsys.readouterr().err
 
 
@@ -333,6 +336,14 @@ def test_no_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: py
         ("copilot-autofix = true", "can't set copilot-autofix"),
         ("secret-scanning = true", "unknown setting: secret-scanning"),
         ("push-protection = 1", "push-protection must be true or false"),
+        (
+            "dependabot-alerts = false\ndependabot-security-updates = true",
+            "dependabot-security-updates can't be true while dependabot-alerts is false",
+        ),
+        (
+            "secret-protection = false\npush-protection = true",
+            "push-protection can't be true while secret-protection is false",
+        ),
     ],
 )
 def test_load_settings_rejects(tmp_path: Path, table: str, message: str) -> None:

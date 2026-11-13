@@ -162,6 +162,8 @@ SETTINGS = [
     ),
 ]
 BY_KEY = {setting.key: setting for setting in SETTINGS}
+# Each setting that GitHub only turns on with another on.
+NEEDS = {"dependabot-security-updates": "dependabot-alerts", "push-protection": "secret-protection"}
 # Settings on the page that GitHub's REST API can't read or change, which the
 # table rejects so nobody thinks repoutils checks them.
 UNSUPPORTED = {
@@ -187,6 +189,10 @@ def load_settings(root: Path = Path()) -> dict[Setting, bool]:
         if not isinstance(value, bool):
             raise config.ConfigError(f"{TABLE} {key} must be true or false")
         settings[setting] = value
+    for dependent, needed in NEEDS.items():
+        if settings.get(BY_KEY[dependent]) is True and settings.get(BY_KEY[needed]) is False:
+            # GitHub can't do both, so ensure would always fail.
+            raise config.ConfigError(f"{TABLE} {dependent} can't be true while {needed} is false")
     return settings
 
 
