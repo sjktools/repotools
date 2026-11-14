@@ -16,6 +16,9 @@ on:
 jobs:
   bump-version:
     runs-on: ubuntu-latest
+    # GH_ACTIONS_TOKEN is in the release environment, which only main can
+    # deploy to, so run this workflow from main.
+    environment: release
     permissions:
       contents: write
       pull-requests: write
