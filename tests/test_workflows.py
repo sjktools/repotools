@@ -46,6 +46,9 @@ from repoutils import workflows
         ("jobs:\n  a:\n    environment: *env\n", [("a", workflows.UNKNOWN)]),
         ("jobs:\n  a:\n    environment:\n      name: |\n        prod\n", [("a", workflows.UNKNOWN)]),
         ("jobs:\n  a:\n    environment: {name: [prod]}\n", [("a", workflows.UNKNOWN)]),
+        # An & or ! after the start of a value is part of it, not an anchor or tag.
+        ("jobs:\n  a:\n    environment: {name: staging, url: 'https://x/?a=1&b=2'}\n", [("a", "staging")]),
+        ("jobs:\n  a:\n    environment: r&d!\n", [("a", "r&d!")]),
         # An anchor or tag on a name is skipped.
         ("jobs:\n  a:\n    environment: &e !!str prod\n", [("a", "prod")]),
         ("jobs:\n  a:\n    environment: &e\n      name: !!str prod\n", [("a", "prod")]),

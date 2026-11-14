@@ -15,7 +15,7 @@ _BUILT_IN = "GITHUB_TOKEN"
 _JOBS_RE = re.compile(r"jobs\s*:\s*")
 _BLOCK_KEY_RE = re.compile(r"(['\"]?)([A-Za-z_][A-Za-z0-9_-]*)\1\s*:(?:\s+(.*))?")
 # A value's leading anchors (&name) and tags (!tag), which don't make it a flow mapping.
-_ANCHORS_AND_TAGS_RE = re.compile(r"(?:[&!]\S*\s*)+")
+_ANCHORS_AND_TAGS_RE = re.compile(r"^(?:[&!]\S*\s*)+")
 # A job's environment key, with its value if it's on the same line.
 _ENVIRONMENT_RE = re.compile(r"environment\s*:\s*(.*)")
 # A job's environment that only an expression gives, so it can't be known.
