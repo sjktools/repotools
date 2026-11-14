@@ -59,6 +59,7 @@ GROUPS: dict[str, list[Command]] = {
         Command("recreate-pr", "recreate_pr", "Recreate a PR as a draft and close the original"),
     ],
     "GitHub repository": [
+        Command("github-settings", "github_settings", "Run check, dump or ensure across all GitHub settings commands"),
         Command("labels", "labels", "Check or create the issue and PR labels pyproject.toml defines"),
         Command("repo-settings", "repo_settings", "Check or change the repository settings pyproject.toml gives"),
         Command("environments", "environments", "Check or create the deployment environments pyproject.toml defines"),

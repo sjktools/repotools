@@ -49,6 +49,7 @@ That installs only repoutils, hash-checked against `uv.lock`, and not the projec
 | `wait-for-base-coverage` | Waits for a PR's base commit to have its `coverage/project` status, so the PR's comparison works. |
 | `post-screenshots` | Uploads a directory of PNGs and posts them to a PR as a comment. |
 | `recreate-pr` | Recreates a PR as a draft from the same branch and closes the original. |
+| `github-settings` | Runs `check`, `dump` or `ensure` across all of repoutils' GitHub settings commands (`ensure` skips `secrets`, which has no `ensure`). |
 | `labels` | Checks or creates the labels `pyproject.toml` defines, or prints the ones the repository has. |
 | `repo-settings` | Checks or changes the repository settings `pyproject.toml` gives, or prints the ones the repository has. |
 | `rulesets` | Checks, creates or updates the branch and tag rulesets `pyproject.toml` defines, or prints the ones the repository has. |
