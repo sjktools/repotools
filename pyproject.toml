@@ -95,6 +95,8 @@ immutable-subject = true
 # The security settings `repoutils security-settings` checks or changes.
 # Secret and push protection are free for a public repository and have no
 # effect on CI. CodeQL default setup stays off, as it would add its own checks.
+# Immutable releases stop a published release's assets and tag from changing,
+# alongside the v* tag rulesets.
 [tool.repoutils.security-settings]
 private-vulnerability-reporting = false
 dependabot-alerts = true
@@ -102,6 +104,7 @@ dependabot-security-updates = false
 codeql-default-setup = false
 secret-protection = true
 push-protection = true
+immutable-releases = true
 
 # The secrets `repoutils secrets` checks the repository has (see AGENTS.md).
 [tool.repoutils.secrets]
