@@ -181,7 +181,10 @@ def main(
             print(f"::warning::Base commit {args.sha} has no {name} status, and its CI has finished ({ci})")
             return 0
         if clock() + args.interval > deadline:
-            print(f"::warning::Base commit {args.sha} still has no {name} status after {args.timeout:g} seconds ({ci})")
+            print(
+                f"::warning::Base commit {args.sha} still has no {name} status after {args.timeout:g} seconds "
+                f"({status}; base CI: {ci})"
+            )
             return 0
         sleep(args.interval)
 

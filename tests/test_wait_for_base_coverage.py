@@ -248,7 +248,18 @@ class WaitForBaseCoverageTests(TestCase):
         )
         self.assertEqual(code, 0)
         self.assertEqual(sleeps, [10, 10])
-        self.assertIn("::warning::Base commit abc123 still has no coverage/project status after 25 seconds", out)
+        self.assertIn(
+            "::warning::Base commit abc123 still has no coverage/project status after 25 seconds "
+            "(no coverage/project status yet; base CI: post-coverage-status in_progress)\n",
+            out,
+        )
+
+    def test_timeout_warning_says_why_the_status_was_missing(self) -> None:
+        # E.g. a token without statuses: read, which the attempt lines alone would show.
+        _, _, out, _, _ = self._main(
+            [(False, "HTTP 403")] * 10, [("running", "post-coverage-status in_progress")] * 10, "--timeout", "5"
+        )
+        self.assertTrue(out.endswith("after 5 seconds (HTTP 403; base CI: post-coverage-status in_progress)\n"))
 
     def test_request_timeout_capped_by_deadline(self) -> None:
         now = [0.0]
