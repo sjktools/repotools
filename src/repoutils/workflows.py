@@ -1,6 +1,7 @@
 """Reading GitHub Actions workflows for the secrets they use, and each job's
 environment, without a YAML parser. Stdlib-only, like every repoutils module."""
 
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,7 +19,7 @@ _ANCHORS_AND_TAGS_RE = re.compile(r"(?:[&!]\S*\s*)+")
 # A job's environment key, with its value if it's on the same line.
 _ENVIRONMENT_RE = re.compile(r"environment\s*:\s*(.*)")
 # The name in an environment mapping, block or flow.
-_NAME_IN_MAPPING_RE = re.compile(r"(?:^|[{,])\s*(['\"]?)name\1\s*:\s*(\"[^\"]*\"|'[^']*'|[^,}]+)")
+_NAME_IN_MAPPING_RE = re.compile(r"(?:^|[{,])\s*(['\"]?)name\1\s*:\s*(\"(?:[^\"\\]|\\.)*\"|'(?:[^']|'')*'|[^,}]+)")
 # A job's environment that only an expression gives, so it can't be known.
 UNKNOWN = "${{ }}"
 
@@ -79,9 +80,16 @@ def _indent(line: str) -> int:
 
 
 def _unquote(value: str) -> str:
+    """value as YAML reads a scalar: a single-quoted one doubles its apostrophes,
+    and a double-quoted one has JSON's escapes (any other is UNKNOWN)."""
     value = value.strip()
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
-        return value[1:-1]
+    if len(value) >= 2 and value[0] == value[-1] == "'":
+        return value[1:-1].replace("''", "'")
+    if len(value) >= 2 and value[0] == value[-1] == '"':
+        try:
+            return str(json.loads(value))
+        except ValueError:
+            return UNKNOWN
     return value
 
 

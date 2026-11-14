@@ -486,3 +486,12 @@ def test_check_workflows_repository_secret_needs_no_environment(
     config_text = '[tool.repoutils.secrets]\nactions = ["TOKEN"]\nenvironments.x = ["TOKEN"]\n'
     assert _workflows(tmp_path, monkeypatch, config_text, ci_yml=workflow) == 0
     assert capsys.readouterr().out == "The workflows use exactly the 1 secret(s) pyproject.toml lists.\n"
+
+
+def test_check_workflows_reads_an_escaped_quote_in_an_environment_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    workflow = "jobs:\n  a:\n    environment: {name: 'prod''us'}\n    env:\n      T: ${{ secrets.TOKEN }}\n"
+    config_text = '[tool.repoutils.secrets]\nenvironments.prod = ["TOKEN"]\n'
+    assert _workflows(tmp_path, monkeypatch, config_text, ci_yml=workflow) == 1
+    assert "TOKEN: used by job a in ci.yml, which declares environment prod'us" in capsys.readouterr().out
