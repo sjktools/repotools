@@ -197,6 +197,12 @@ def test_comment_posters(
             "[tool.repoutils] comment-prefix must be a non-empty string without '-->'",
             False,
         ),
+        (
+            ["post-coverage-status", "0" * 40],
+            "[tool.repoutils.coverage]\nproject-status = 3\n",
+            "[tool.repoutils.coverage] project-status must be a non-empty string of 255 characters at most",
+            False,
+        ),
     ],
 )
 def test_bad_pyproject_setting_prints_one_line_error(
@@ -227,6 +233,7 @@ def test_bad_pyproject_setting_prints_one_line_error(
         (["post-comment", "1", "report.md", "--name", "x"], False),
         (["post-patch-coverage", "1"], False),
         (["post-screenshots", "1"], False),
+        (["post-coverage-status", "0" * 40], False),
         # These read other tables of pyproject.toml, not [tool.repoutils].
         (["check-pins"], False),
         (["requirements-min-versions", "check"], True),
