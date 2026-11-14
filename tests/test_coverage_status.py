@@ -134,8 +134,9 @@ def test_bad_status_name(tmp_path: Path, key: str, value: str) -> None:
         coverage_status.status_names(tmp_path)
 
 
-def test_same_status_names(tmp_path: Path) -> None:
-    (tmp_path / "pyproject.toml").write_text('[tool.repoutils.coverage]\npatch-status = "coverage/project"\n')
+@pytest.mark.parametrize("setting", ['patch-status = "coverage/project"', 'project-status = "COVERAGE/PATCH"'])
+def test_same_status_names(tmp_path: Path, setting: str) -> None:
+    (tmp_path / "pyproject.toml").write_text(f"[tool.repoutils.coverage]\n{setting}\n")
     with pytest.raises(config.ConfigError, match="project-status and patch-status must differ"):
         coverage_status.status_names(tmp_path)
 

@@ -183,7 +183,8 @@ def status_names(root: Path = Path()) -> tuple[str, str]:
     table = config.section("coverage", root)
     project = _status_name(table, "project-status", DEFAULT_PROJECT_STATUS)
     patch = _status_name(table, "patch-status", DEFAULT_PATCH_STATUS)
-    if project == patch:
+    # GitHub matches a status's context ignoring case.
+    if project.casefold() == patch.casefold():
         raise config.ConfigError("[tool.repoutils.coverage] project-status and patch-status must differ")
     return project, patch
 
