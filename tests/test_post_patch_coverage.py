@@ -12,9 +12,10 @@ from typing import Any
 from unittest import TestCase, mock
 
 from repoutils.commands.post_patch_coverage import MARKER as PATCH_COVERAGE_MARKER
-from repoutils.commands.post_patch_coverage import MAX_BODY_CHARS, _build_body
+from repoutils.commands.post_patch_coverage import MAX_BODY_CHARS, ProjectCoverage, _build_body
 from repoutils.commands.post_patch_coverage import main as post_patch_coverage_main
 from repoutils.commands.post_screenshots import MARKER
+from repoutils.coverage_status import Totals
 
 
 class PostPatchCoverageTests(TestCase):
@@ -31,10 +32,15 @@ class PostPatchCoverageTests(TestCase):
         comments: Sequence[dict[str, Any]] = (),
         fail: tuple[Any, ...] | None = None,
         head: str = "abc1234def",
+        statuses: Sequence[dict[str, Any]] = (),
+        files: dict[str, str] | None = None,
+        pr: tuple[str, ...] = ("7",),
     ) -> tuple[int, str, list[tuple[Any, ...]]]:
-        """Run main() on PR 7 in a temp dir holding patch-coverage.md (unless
-        report is None), with the API faked as in PostScreenshotsTests. Return
-        the exit code, stderr and each request as (method, url, token, json_body)."""
+        """Run main() on PR 7 (or pr) in a temp dir holding patch-coverage.md
+        (unless report is None) and files, with the API faked as in
+        PostScreenshotsTests and each commit having statuses. Return the exit
+        code, stderr and each request as (method, url, token, json_body), and
+        keep stdout in self.stdout and the files written in self.files."""
         requests: list[tuple[Any, ...]] = []
 
         def fake_request(method: str, url: str, token: str, *, json_body: object = None, **kw: Any) -> Any:
@@ -49,20 +55,27 @@ class PostPatchCoverageTests(TestCase):
                 return {"head": {"sha": head}}
             if method == "GET" and "/issues/7/comments" in url:
                 return list(comments)
+            if method == "GET" and "/status?" in url:
+                return {"statuses": list(statuses)}
             return None
 
         with tempfile.TemporaryDirectory() as tmp:
             if report is not None:
                 (Path(tmp) / "patch-coverage.md").write_text(report)
+            for name, text in (files or {}).items():
+                (Path(tmp) / name).write_text(text)
+            stdout = io.StringIO()
             stderr = io.StringIO()
             with (
                 contextlib.chdir(tmp),
-                contextlib.redirect_stdout(io.StringIO()),
+                contextlib.redirect_stdout(stdout),
                 contextlib.redirect_stderr(stderr),
                 mock.patch.dict("os.environ", {"GITHUB_TOKEN": "ghs", "GITHUB_REPOSITORY": "o/r"}, clear=True),
                 mock.patch("repoutils.github.request", fake_request),
             ):
-                code = post_patch_coverage_main(["7", *args])
+                code = post_patch_coverage_main([*pr, *args])
+            self.files = {path.name: path.read_text() for path in Path(tmp).iterdir()}
+        self.stdout = stdout.getvalue()
         return code, stderr.getvalue(), requests
 
     def _writes(self, requests: list[tuple[Any, ...]]) -> list[tuple[Any, ...]]:
@@ -115,6 +128,8 @@ class PostPatchCoverageTests(TestCase):
             self.HEAD.replace("**Missing**", "**Uncovered**"): "line 9: expected '- **Missing**: ...'",
             self.HEAD.replace("**Total**: 2 lines", "**Coverage**: 50%"): "line 8: expected '- **Total**: ...'",
             self.HEAD.replace("- **Coverage**: 50%\n", ""): "line 10: expected '- **Coverage**: ...', found the end",
+            self.HEAD.replace("2 lines", "two lines"): "line 8: expected '<n> lines', found 'two lines'",
+            self.HEAD.replace("2 lines", "0 lines"): "line 9: 1 missing lines of 0",
         }
         for report, error in cases.items():
             with self.subTest(report):
@@ -221,6 +236,148 @@ class PostPatchCoverageTests(TestCase):
             note, "_Report truncated; the whole of it is in the `patch-coverage` artifact of the workflow run._"
         )
 
+    BASE = "1a2b3c4" + "0" * 33
+    COVERAGE_XML = '<coverage lines-valid="100" lines-covered="95" />'
+
+    def _project(
+        self, *args: str, base_description: str | None = "96.00% (96/100 lines)", pyproject: str = "", **kw: Any
+    ) -> tuple[int, str, list[tuple[Any, ...]]]:
+        """_run with coverage.xml at 95% and the base's coverage/project status giving base_description."""
+        statuses = [{"context": "lint", "description": "ok"}]
+        if base_description is not None:
+            statuses.append({"context": "coverage/project", "description": base_description})
+        files = {"coverage.xml": self.COVERAGE_XML, "pyproject.toml": pyproject}
+        return self._run(
+            "--coverage-report", "coverage.xml", "--base", self.BASE, *args, statuses=statuses, files=files, **kw
+        )
+
+    def test_project_coverage_and_change(self) -> None:
+        code, _, requests = self._project("--commit", "abc1234")
+        self.assertEqual(code, 0)
+        self.assertIn(
+            ("GET", f"https://api.github.com/repos/o/r/commits/{self.BASE}/status?per_page=100&page=1"),
+            [r[:2] for r in requests],
+        )
+        warning = (
+            "Patch coverage is 50.00%, 46.00 points below the base's project coverage of 96.00%; "
+            "`warn-patch-below` allows 1."
+        )
+        self.assertEqual(
+            self._writes(requests)[0][3]["body"].split("### Diff:")[0],
+            f"{PATCH_COVERAGE_MARKER}\n## Coverage\n\nCoverage of abc1234.\n\n"
+            f"> [!WARNING]\n> {warning}\n\n"
+            "### Project\n\n| Commit | Coverage |\n| --- | ---: |\n"
+            "| Head, `abc1234` | 95.00% (95/100 lines) |\n"
+            "| Base, `1a2b3c4` | 96.00% (96/100 lines) |\n"
+            "| Change | -1.00 points |\n\n",
+        )
+        self.assertIn(f"::warning::{warning}\n", self.stdout)
+
+    def test_project_drop_warning(self) -> None:
+        code, _, requests = self._project(base_description="97.50% (195/200 lines), +0.10 points from 0123456")
+        self.assertEqual(code, 0)
+        body = self._writes(requests)[0][3]["body"]
+        self.assertIn("> Project coverage fell by 2.50 points from the base's; `warn-project-drop` allows 2.\n", body)
+        self.assertIn("| Change | -2.50 points |", body)
+        self.assertIn("::warning::Project coverage fell by 2.50 points", self.stdout)
+
+    def test_project_rise(self) -> None:
+        code, _, requests = self._project(base_description="40.00% (40/100 lines)")
+        self.assertEqual(code, 0)
+        body = self._writes(requests)[0][3]["body"]
+        self.assertIn("| Change | +55.00 points |", body)
+        self.assertNotIn("WARNING", body)
+        self.assertNotIn("::warning::", self.stdout)
+
+    def test_configured_limits(self) -> None:
+        pyproject = "[tool.repoutils.coverage]\nwarn-project-drop = 3\nwarn-patch-below = false\n"
+        code, _, requests = self._project(base_description="97.50% (195/200 lines)", pyproject=pyproject)
+        self.assertEqual(code, 0)
+        self.assertNotIn("WARNING", self._writes(requests)[0][3]["body"])
+        pyproject = "[tool.repoutils.coverage]\nwarn-project-drop = 2.4\nwarn-patch-below = 50\n"
+        code, _, requests = self._project(base_description="97.50% (195/200 lines)", pyproject=pyproject)
+        self.assertEqual(code, 0)
+        body = self._writes(requests)[0][3]["body"]
+        self.assertIn("`warn-project-drop` allows 2.4.", body)
+        self.assertNotIn("warn-patch-below", body)
+
+    def test_bad_limit_fails(self) -> None:
+        code, stderr, requests = self._project(pyproject="[tool.repoutils.coverage]\nwarn-patch-below = -1\n")
+        self.assertEqual(code, 1)
+        self.assertIn("[tool.repoutils.coverage] warn-patch-below must be a number, 0 or more, or false", stderr)
+        self.assertEqual(requests, [])
+
+    def test_bad_coverage_report_fails(self) -> None:
+        code, stderr, requests = self._run("--coverage-report", "coverage.xml", files={"coverage.xml": "<coverage/>"})
+        self.assertEqual(code, 1)
+        self.assertIn("coverage.xml: not a Cobertura coverage report", stderr)
+        self.assertEqual(requests, [])
+
+    def test_no_base_status(self) -> None:
+        code, _, requests = self._project("--commit", "abc1234", base_description=None)
+        self.assertEqual(code, 0)
+        body = self._writes(requests)[0][3]["body"]
+        self.assertIn(
+            "| Head, `abc1234` | 95.00% (95/100 lines) |\n\n"
+            "The base commit, `1a2b3c4`, has no `coverage/project` status to compare with, "
+            "as its CI failed or didn't finish in time.\n\n### Diff:",
+            body,
+        )
+        # The patch is compared with the PR's own project coverage instead.
+        self.assertIn("50.00%, 45.00 points below the PR's project coverage of 95.00%", body)
+
+    def test_bad_base_status_fails(self) -> None:
+        code, stderr, requests = self._project(base_description="lots")
+        self.assertEqual(code, 1)
+        self.assertIn("not a coverage status description: 'lots'", stderr)
+        self.assertEqual(self._writes(requests), [])
+
+    def test_without_base(self) -> None:
+        code, _, requests = self._run("--coverage-report", "coverage.xml", files={"coverage.xml": self.COVERAGE_XML})
+        self.assertEqual(code, 0)
+        self.assertNotIn("/status?", "".join(r[1] for r in requests))
+        body = self._writes(requests)[0][3]["body"]
+        self.assertIn("| Head | 95.00% (95/100 lines) |\n\n### Diff:", body)
+        self.assertIn("below the PR's project coverage of 95.00%", body)
+
+    def test_output(self) -> None:
+        code, _, requests = self._run(
+            "--output",
+            "summary.md",
+            "--coverage-report",
+            "coverage.xml",
+            files={"coverage.xml": self.COVERAGE_XML, "summary.md": "before\n"},
+            pr=(),
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(requests, [])
+        summary = self.files["summary.md"]
+        self.assertTrue(summary.startswith("before\n## Coverage\n\n> [!WARNING]\n"))
+        self.assertNotIn("<!--", summary)
+        self.assertTrue(summary.endswith("```\n\n\n---\n"))
+        self.assertIn("::warning::Patch coverage is 50.00%", self.stdout)
+
+    def test_output_with_base(self) -> None:
+        code, _, requests = self._project("--output", "summary.md", pr=())
+        self.assertEqual(code, 0)
+        self.assertEqual([r[0] for r in requests], ["GET"])
+        self.assertIn("| Base, `1a2b3c4` | 96.00% (96/100 lines) |", self.files["summary.md"])
+
+    def test_output_unwritable(self) -> None:
+        code, stderr, _ = self._run("--output", "missing/summary.md", pr=())
+        self.assertEqual(code, 1)
+        self.assertIn("missing/summary.md", stderr)
+
+    def test_usage_errors(self) -> None:
+        for args, error in [
+            ((), "give a PR number, or --output"),
+            (("7", "--base", "abc"), "--base needs --coverage-report"),
+        ]:
+            with self.subTest(args), contextlib.redirect_stderr(io.StringIO()) as stderr:
+                with self.assertRaises(SystemExit):
+                    post_patch_coverage_main(list(args))
+                self.assertIn(error, stderr.getvalue())
+
     def test_missing_report(self) -> None:
         code, stderr, requests = self._run(report=None)
         self.assertEqual(code, 1)
@@ -303,16 +460,33 @@ class PatchCoverageRealDiffCoverTests(TestCase):
             return (path / "report.md").read_text()
 
     def test_missing_lines(self) -> None:
-        body = _build_body(self._report("a = 1\nb = 2\nc = 3\nd = 4\n", {1: 1, 2: 0, 3: 1, 4: 0}), "abc", None)
+        project = ProjectCoverage(Totals(90, 100))
+        body, warnings = _build_body(
+            self._report("a = 1\nb = 2\nc = 3\nd = 4\n", {1: 1, 2: 0, 3: 1, 4: 0}), "abc", None, project=project
+        )
+        # The patch figure in the warning is from the summary's line counts.
+        self.assertEqual(
+            warnings,
+            [
+                "Patch coverage is 33.33%, 56.67 points below the PR's project coverage of 90.00%; "
+                "`warn-patch-below` allows 1."
+            ],
+        )
         self.assertIn("| `a.py` | 33.3% | 2, 4 |", body)
         self.assertIn("| 3 lines | 2 lines | 33% |", body)
         self.assertIn("! 2 b = 2", body)
 
     def test_all_covered(self) -> None:
-        body = _build_body(self._report("a = 1\nb = 2\n", {1: 1, 2: 1}), "abc", None)
+        body, warnings = _build_body(
+            self._report("a = 1\nb = 2\n", {1: 1, 2: 1}), "abc", None, project=ProjectCoverage(Totals(100, 100))
+        )
+        self.assertEqual(warnings, [])
         self.assertIn("| `a.py` | 100% |  |", body)
         self.assertIn("| 1 line | 0 lines | 100% |", body)
 
     def test_no_lines(self) -> None:
-        body = _build_body(self._report("a = 1\n# comment\n", {1: 1}), "abc", None)
+        body, warnings = _build_body(
+            self._report("a = 1\n# comment\n", {1: 1}), "abc", None, project=ProjectCoverage(Totals(0, 100))
+        )
+        self.assertEqual(warnings, [])
         self.assertTrue(body.endswith("No lines with coverage information in this diff."))

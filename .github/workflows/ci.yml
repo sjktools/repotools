@@ -90,8 +90,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # For wait-for-base-coverage to read the base commit's check runs.
+      # For wait-for-base-coverage to read the base commit's check runs and
+      # statuses, and post-patch-coverage its coverage/project status.
       checks: read
+      statuses: read
     outputs:
       # So post-patch-coverage posts the report even if a later step fails.
       patch-report: ${{ steps.patch-report.outcome }}
@@ -137,9 +139,7 @@ jobs:
 
       # The lines a PR changes, or on main the lines the commit changes.
       - name: Report patch coverage
-        run: |
-          just diff-cover "$BASE" --format markdown:patch-coverage.md,json:patch-coverage.json
-          cat patch-coverage.md >> "$GITHUB_STEP_SUMMARY"
+        run: just diff-cover "$BASE" --format markdown:patch-coverage.md,json:patch-coverage.json
         env:
           BASE: ${{ github.base_ref && format('origin/{0}', github.base_ref) || 'HEAD^' }}
 
@@ -165,14 +165,22 @@ jobs:
           path: patch-coverage.md
           retention-days: 14
 
-      # Codecov compares a PR with its base's report only when the PR's upload
-      # is processed, and never again, so wait for the base's upload first (e.g.
-      # when this PR was just brought up to date with main and main's run is
-      # still going). It never fails the job, only warns, and is quick when the
-      # base's CI has finished.
-      - name: Wait for the PR base's coverage on Codecov
+      # The comparison with the PR's base reads the base commit's
+      # coverage/project status, which the base's own post-coverage-status job
+      # posts, so wait for it (e.g. when this PR was just brought up to date
+      # with main and main's run is still going). It never fails the job, only
+      # warns, and is quick when the base's CI has finished.
+      - name: Wait for the PR base's coverage status
         if: github.event_name == 'pull_request'
         run: just wait-for-base-coverage "$GITHUB_REPOSITORY" "$BASE_SHA"
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+
+      # The comment post-patch-coverage posts, in the job summary, so it's
+      # there for fork and Dependabot PRs too, which can't post it.
+      - name: Summarise coverage
+        run: just patch-coverage-post --output "$GITHUB_STEP_SUMMARY" --coverage-report coverage.xml ${BASE_SHA:+--base "$BASE_SHA"}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           GITHUB_TOKEN: ${{ github.token }}
@@ -187,7 +195,10 @@ jobs:
 
   # Post the patch-coverage artifact (diff-cover's Markdown report) to the PR
   # as a github-actions[bot] comment, or edit the one posted before, so it's
-  # seen without opening the coverage job's summary or Codecov. Runs whenever
+  # seen without opening the coverage job's summary or Codecov. It adds the
+  # project's coverage from the coverage-status artifact, and its change from
+  # the base's coverage/project status, which the coverage job waited for, and
+  # warns when either falls short (never failing for that). Runs whenever
   # the coverage job uploaded the report, even if a Codecov step then failed.
   # Only for PRs from this repo: on a fork's or Dependabot's PR, GITHUB_TOKEN
   # is read-only. Queued per PR, and posts only if HEAD_SHA is still the PR's
@@ -201,6 +212,8 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      # To read the base commit's coverage/project status.
+      statuses: read
     concurrency:
       group: post-patch-coverage-${{ github.event.pull_request.number }}
       cancel-in-progress: false
@@ -226,15 +239,27 @@ jobs:
         uses: actions/download-artifact@v8.0.2
         with:
           name: patch-coverage
+          path: ${{ runner.temp }}/patch-coverage
+
+      - name: Download coverage reports
+        uses: actions/download-artifact@v8.0.2
+        with:
+          name: coverage-status
+          path: ${{ runner.temp }}/coverage-status
 
       - name: Post patch coverage to the PR
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          REPORTS: ${{ runner.temp }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         # GITHUB_TOKEN can't look up its own login, so name it.
-        run: just patch-coverage-post "$PR_NUMBER" --commit "$HEAD_SHA" --run-url "$RUN_URL" --author 'github-actions[bot]'
+        run: |
+          just patch-coverage-post "$PR_NUMBER" --commit "$HEAD_SHA" --run-url "$RUN_URL" --author 'github-actions[bot]' \
+            --report "$REPORTS/patch-coverage/patch-coverage.md" \
+            --coverage-report "$REPORTS/coverage-status/coverage.xml" --base "$BASE_SHA"
 
   # Posts the coverage job's figures as two commit statuses, always success:
   # coverage/project, with the change from the PR's base (or on main, the

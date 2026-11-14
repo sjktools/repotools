@@ -44,9 +44,9 @@ That installs only repoutils, hash-checked against `uv.lock`, and not the projec
 | `check-lock-platforms` | Fails if `uv.lock` has wheels for platforms the project doesn't allow. |
 | `post-comment` | Posts a Markdown file to a PR, editing the earlier comment or hiding it with `--hide-previous`. |
 | `added-strings` | Lists the lines a PR adds that have strings `pyproject.toml` configures, such as `# noqa:`, or posts that to a PR, for information only. |
-| `post-patch-coverage` | Posts diff-cover's Markdown patch coverage report to a PR, reformatted. |
+| `post-patch-coverage` | Posts diff-cover's Markdown patch coverage report to a PR, reformatted, with the project's coverage and its change from the PR's base, and warns when either falls short. |
 | `post-coverage-status` | Posts a commit's project and patch coverage as commit statuses, as a record and not a gate. |
-| `wait-for-base-coverage` | Waits for Codecov to have a PR base commit's coverage, so the PR's comparison works. |
+| `wait-for-base-coverage` | Waits for a PR's base commit to have its `coverage/project` status, so the PR's comparison works. Version 0.1.0 waited for Codecov instead. |
 | `post-screenshots` | Uploads a directory of PNGs and posts them to a PR as a comment. |
 | `recreate-pr` | Recreates a PR as a draft from the same branch and closes the original. |
 | `labels` | Checks or creates the labels `pyproject.toml` defines, or prints the ones the repository has. |
@@ -73,10 +73,13 @@ comment-prefix = "repoutils"
 # The branch to compare with when there's no PR base.
 default-branch = "main"
 
-# The names of the commit statuses `repoutils post-coverage-status` posts; see below.
+# The names of the commit statuses `repoutils post-coverage-status` posts, and
+# when `repoutils post-patch-coverage` warns (false for never); see below.
 [tool.repoutils.coverage]
 project-status = "coverage/project"
 patch-status = "coverage/patch"
+warn-project-drop = 2
+warn-patch-below = 1
 
 [tool.repoutils.sentence-per-line]
 files = ["AGENTS.md", "README.md"]
@@ -271,6 +274,31 @@ A token that can post statuses can post one under any name, including a required
 So post from a job of its own that installs nothing, and hand it the reports as an artifact.
 That job needs `statuses: write`, which a fork's or Dependabot's PR doesn't get.
 `--dry-run` prints the statuses without posting them.
+
+### Patch coverage comment
+
+`repoutils post-patch-coverage <PR>` posts diff-cover's Markdown report to the PR, and edits that comment on later runs.
+Given `--coverage-report coverage.xml`, the comment also shows the project's coverage.
+Given `--base` too, the PR's base commit, it shows that commit's `coverage/project` status and the change from it.
+It never compares with an older commit, whose figure would include whatever else has merged since.
+When the base has no status, the comment says so and shows the PR's figure alone.
+
+The comment warns, and prints a `::warning::` for the run page, in two cases:
+
+- Project coverage fell from the base's by more than `warn-project-drop` points (default 2).
+- Patch coverage is more than `warn-patch-below` points under the base's project coverage (default 1), or the PR's when the base has none.
+
+These only warn, so coverage never fails the command.
+It still fails when it can't produce the report, such as on a bad report, a bad setting or a failed request to GitHub.
+`--output <file>` appends the comment to a file, such as `$GITHUB_STEP_SUMMARY`, instead of posting it.
+That shows the same figures on fork and Dependabot PRs, whose token can't comment.
+
+The base's CI may still be running when the PR's coverage is ready, so run `repoutils wait-for-base-coverage <owner/repo> <base>` first.
+It polls the base's `coverage/project` status, and stops as soon as it's there.
+While it's missing, it watches the base's `post-coverage-status` check run (`--check-name`), and stops once that finishes.
+After 10 minutes (`--timeout`) it stops anyway.
+Giving up only warns and exits 0, so a broken base doesn't fail the PR's own checks.
+It needs `checks: read` and `statuses: read`.
 
 ### Labels
 

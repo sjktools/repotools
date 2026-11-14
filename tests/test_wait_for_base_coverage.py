@@ -3,18 +3,22 @@ import http.client
 import http.server
 import io
 import json
+import tempfile
 import threading
 import urllib.error
 import urllib.request
 from collections.abc import Callable
 from email.message import Message
+from pathlib import Path
 from typing import Any, override
 from unittest import TestCase, mock
 
 from repoutils.commands import wait_for_base_coverage
-from repoutils.commands.wait_for_base_coverage import base_ci_state, codecov_coverage
+from repoutils.commands.wait_for_base_coverage import base_ci_state, base_status
 from repoutils.commands.wait_for_base_coverage import main as wait_for_base_coverage_main
 from tests.test_github import NO_REDIRECT_OPEN
+
+DESCRIPTION = "96.52% (2114/2172 lines, 610/650 branches)"
 
 
 class WaitForBaseCoverageTests(TestCase):
@@ -30,33 +34,50 @@ class WaitForBaseCoverageTests(TestCase):
     def _http_error(self, status: int, payload: bytes) -> urllib.error.HTTPError:
         return urllib.error.HTTPError("https://example/", status, "Error", Message(), io.BytesIO(payload))
 
-    def _call(
-        self, func: Callable[..., Any], result: object, *args: Any, target: str = "urllib.request.urlopen"
-    ) -> tuple[Any, urllib.request.Request]:
+    def _call(self, func: Callable[..., Any], result: object, *args: Any) -> tuple[Any, urllib.request.Request]:
         kwargs: dict[str, Any] = {"side_effect" if isinstance(result, Exception) else "return_value": result}
-        with mock.patch(target, **kwargs) as urlopen:
+        with mock.patch(NO_REDIRECT_OPEN, **kwargs) as urlopen:
             outcome = func(self.REPO, self.SHA, *args, 7)
         self.assertEqual(urlopen.call_args.kwargs, {"timeout": 7})
         return outcome, urlopen.call_args.args[0]
 
-    def test_codecov_coverage(self) -> None:
-        outcome, request = self._call(codecov_coverage, self._response(200, b'{"totals": {"coverage": 98.5}}'))
-        self.assertEqual(outcome, (True, "coverage 98.5%"))
-        self.assertEqual(request.full_url, "https://api.codecov.io/api/v2/github/owner/repos/repo/totals/?sha=abc123")
+    def _statuses(self, *contexts: str) -> mock.MagicMock:
+        statuses = [{"context": c, "description": f"{c} says {DESCRIPTION}"} for c in contexts]
+        return self._response(200, json.dumps({"state": "success", "statuses": statuses}).encode())
 
-    def test_codecov_no_coverage(self) -> None:
-        self.assertEqual(
-            self._call(codecov_coverage, self._http_error(404, b'{"detail": "No coverage report"}'))[0],
-            (False, "no report yet"),
+    def test_base_status_found(self) -> None:
+        outcome, request = self._call(
+            base_status, self._statuses("lint", "Coverage/Project"), "coverage/project", "t0k"
         )
-        self.assertEqual(self._call(codecov_coverage, self._http_error(500, b"<html>"))[0], (False, "HTTP 500"))
+        self.assertEqual(outcome, (True, f"Coverage/Project says {DESCRIPTION}"))
         self.assertEqual(
-            self._call(codecov_coverage, self._response(200, b'{"totals": {"coverage": null}}'))[0],
-            (False, "no coverage in report"),
+            request.full_url, "https://api.github.com/repos/owner/repo/commits/abc123/status?per_page=100&page=1"
         )
-        self.assertEqual(self._call(codecov_coverage, self._response(200, b"[]"))[0], (False, "no coverage in report"))
+        self.assertEqual(request.get_header("Authorization"), "Bearer t0k")
+
+    def test_base_status_missing(self) -> None:
+        outcome, request = self._call(base_status, self._statuses("lint"), "coverage/project", None)
+        self.assertEqual(outcome, (False, "no coverage/project status yet"))
+        self.assertFalse(request.has_header("Authorization"))
+
+    def test_base_status_pages(self) -> None:
+        pages = [self._statuses(*(f"s{i}" for i in range(100))), self._statuses("coverage/project")]
+        with mock.patch(NO_REDIRECT_OPEN, side_effect=pages) as urlopen:
+            found, _ = base_status(self.REPO, self.SHA, "coverage/project", None, 7)
+        self.assertTrue(found)
+        self.assertTrue(urlopen.call_args.args[0].full_url.endswith("&page=2"))
+
+    def test_base_status_errors(self) -> None:
         self.assertEqual(
-            self._call(codecov_coverage, urllib.error.URLError("timed out"))[0],
+            self._call(base_status, self._http_error(404, b'{"message": "No commit"}'), "coverage/project", None)[0],
+            (False, "HTTP 404"),
+        )
+        self.assertEqual(
+            self._call(base_status, self._response(200, b"<html>"), "coverage/project", None)[0],
+            (False, "HTTP 200"),
+        )
+        self.assertEqual(
+            self._call(base_status, urllib.error.URLError("timed out"), "coverage/project", None)[0],
             (False, "request failed: timed out"),
         )
 
@@ -65,49 +86,44 @@ class WaitForBaseCoverageTests(TestCase):
     ) -> tuple[tuple[str, str], urllib.request.Request]:
         body = json.dumps({"total_count": len(runs), "check_runs": list(runs)}).encode()
         with mock.patch(NO_REDIRECT_OPEN, return_value=self._response(200, body)) as urlopen:
-            outcome = base_ci_state(self.REPO, self.SHA, "test", token, 7)
+            outcome = base_ci_state(self.REPO, self.SHA, "post", token, 7)
         return outcome, urlopen.call_args.args[0]
 
     def test_base_ci_running(self) -> None:
         outcome, request = self._check_runs({"id": 1, "status": "in_progress", "conclusion": None})
-        self.assertEqual(outcome, ("running", "test in_progress"))
+        self.assertEqual(outcome, ("running", "post in_progress"))
         self.assertEqual(
             request.full_url,
-            "https://api.github.com/repos/owner/repo/commits/abc123/check-runs?check_name=test&filter=latest",
+            "https://api.github.com/repos/owner/repo/commits/abc123/check-runs?check_name=post&filter=latest",
         )
         self.assertFalse(request.has_header("Authorization"))
+        # A job gets its check run only once the jobs it needs have finished.
+        self.assertEqual(self._check_runs()[0], ("running", "no post check run yet"))
 
     def test_base_ci_finished(self) -> None:
         outcome, request = self._check_runs(
-            {"id": 2, "status": "completed", "conclusion": "failure"},
+            {"id": 2, "status": "completed", "conclusion": "skipped"},
             {"id": 1, "status": "in_progress", "conclusion": None},
             token="t0k",
         )
-        self.assertEqual(outcome, ("failed", "test failure"))
+        self.assertEqual(outcome, ("finished", "post skipped"))
         self.assertEqual(request.get_header("Authorization"), "Bearer t0k")
         self.assertEqual(
             self._check_runs({"id": 1, "status": "completed", "conclusion": "success"})[0],
-            ("succeeded", "test success"),
+            ("finished", "post success"),
         )
-        self.assertEqual(
-            self._check_runs({"id": 1, "status": "completed", "conclusion": "cancelled"})[0],
-            ("failed", "test cancelled"),
-        )
-        self.assertEqual(self._check_runs()[0], ("none", "no test check run"))
 
     def test_base_ci_errors(self) -> None:
         self.assertEqual(
-            self._call(
-                base_ci_state, self._http_error(403, b'{"message": "no"}'), "test", None, target=NO_REDIRECT_OPEN
-            )[0],
+            self._call(base_ci_state, self._http_error(403, b'{"message": "no"}'), "post", None)[0],
             ("running", "HTTP 403"),
         )
         self.assertEqual(
-            self._call(base_ci_state, http.client.IncompleteRead(b""), "test", None, target=NO_REDIRECT_OPEN)[0],
+            self._call(base_ci_state, http.client.IncompleteRead(b""), "post", None)[0],
             ("running", "request failed: IncompleteRead(0 bytes read)"),
         )
 
-    def test_base_ci_redirect_not_followed(self) -> None:
+    def test_redirect_not_followed(self) -> None:
         # A real server, as it's urllib's own redirect handling (which would
         # send the token on to another host) that mustn't run.
         seen: list[tuple[str, str | None]] = []
@@ -130,18 +146,24 @@ class WaitForBaseCoverageTests(TestCase):
             thread.start()
             try:
                 with mock.patch.object(wait_for_base_coverage, "GITHUB_API", f"http://127.0.0.1:{server.server_port}"):
-                    outcome = base_ci_state(self.REPO, self.SHA, "test", "t0k", 7)
+                    ci = base_ci_state(self.REPO, self.SHA, "post", "t0k", 7)
+                    status = base_status(self.REPO, self.SHA, "coverage/project", "t0k", 7)
             finally:
                 server.shutdown()
                 thread.join()
-        self.assertEqual(outcome, ("running", "HTTP 302"))
+        self.assertEqual(ci, ("running", "HTTP 302"))
+        self.assertEqual(status, (False, "HTTP 302"))
         self.assertEqual(
-            seen, [("/repos/owner/repo/commits/abc123/check-runs?check_name=test&filter=latest", "Bearer t0k")]
+            seen,
+            [
+                ("/repos/owner/repo/commits/abc123/check-runs?check_name=post&filter=latest", "Bearer t0k"),
+                ("/repos/owner/repo/commits/abc123/status?per_page=100&page=1", "Bearer t0k"),
+            ],
         )
 
     def _main(
-        self, coverage: list[tuple[bool, str]], ci: list[tuple[str, str]], *args: str
-    ) -> tuple[int, list[float], str, mock.MagicMock]:
+        self, statuses: list[tuple[bool, str]], ci: list[tuple[str, str]], *args: str, pyproject: str = ""
+    ) -> tuple[int, list[float], str, mock.MagicMock, mock.MagicMock]:
         now = [0.0]
         sleeps: list[float] = []
 
@@ -151,95 +173,99 @@ class WaitForBaseCoverageTests(TestCase):
 
         out = io.StringIO()
         with (
-            mock.patch("repoutils.commands.wait_for_base_coverage.codecov_coverage", side_effect=coverage),
+            tempfile.TemporaryDirectory() as tmp,
+            contextlib.chdir(tmp),
+            mock.patch("repoutils.commands.wait_for_base_coverage.base_status", side_effect=statuses) as status_mock,
             mock.patch("repoutils.commands.wait_for_base_coverage.base_ci_state", side_effect=ci) as ci_mock,
             mock.patch.dict("os.environ", {"GITHUB_TOKEN": "t0k"}),
             contextlib.redirect_stdout(out),
         ):
+            Path("pyproject.toml").write_text(pyproject)
             code = wait_for_base_coverage_main([self.REPO, self.SHA, *args], clock=lambda: now[0], sleep=sleep)
-        return code, sleeps, out.getvalue(), ci_mock
+        return code, sleeps, out.getvalue(), status_mock, ci_mock
 
-    def test_base_already_has_coverage(self) -> None:
-        code, sleeps, out, ci = self._main([(True, "coverage 98%")], [])
+    def test_base_already_has_status(self) -> None:
+        code, sleeps, out, statuses, ci = self._main([(True, DESCRIPTION)], [])
         self.assertEqual(code, 0)
         self.assertEqual(sleeps, [])
-        self.assertEqual(out, "Attempt 1: Codecov has the base report for abc123 (coverage 98%)\n")
+        self.assertEqual(out, f"Attempt 1: base commit abc123 has its coverage/project status ({DESCRIPTION})\n")
+        self.assertEqual(statuses.call_args.args, (self.REPO, self.SHA, "coverage/project", "t0k", 30))
         ci.assert_not_called()
 
+    def test_configured_status_name(self) -> None:
+        _, _, out, statuses, _ = self._main(
+            [(True, DESCRIPTION)], [], pyproject='[tool.repoutils.coverage]\nproject-status = "cov"\n'
+        )
+        self.assertEqual(statuses.call_args.args[2], "cov")
+        self.assertIn("its cov status", out)
+
     def test_waits_for_base_ci(self) -> None:
-        code, sleeps, out, ci = self._main(
-            [(False, "no report yet"), (False, "no report yet"), (True, "coverage 98%")],
-            [("running", "test in_progress"), ("succeeded", "test success")],
+        code, sleeps, out, _, ci = self._main(
+            [(False, "no coverage/project status yet")] * 2 + [(True, DESCRIPTION)],
+            [("running", "no post-coverage-status check run yet"), ("running", "post-coverage-status queued")],
         )
         self.assertEqual(code, 0)
         self.assertEqual(sleeps, [10, 10])
-        self.assertIn("Attempt 1: Codecov: no report yet; base CI: test in_progress\n", out)
+        self.assertIn(
+            "Attempt 1: no coverage/project status yet; base CI: no post-coverage-status check run yet\n", out
+        )
         self.assertNotIn("::warning::", out)
-        self.assertEqual(ci.call_args.args, (self.REPO, self.SHA, "test", "t0k", 30))
+        self.assertEqual(ci.call_args.args, (self.REPO, self.SHA, "post-coverage-status", "t0k", 30))
 
-    def test_gives_up_after_grace(self) -> None:
-        code, sleeps, out, _ = self._main(
-            [(False, "no report yet")] * 10,
-            [("succeeded", "test success")] * 10,
-            "--grace",
-            "25",
-        )
-        self.assertEqual(code, 0)
-        self.assertEqual(sleeps, [10, 10, 10])
-        self.assertTrue(
-            out.endswith(
-                "::warning::Codecov has no coverage for base commit abc123, whose CI has finished (test success)\n"
-            )
-        )
-
-    def test_gives_up_at_once_if_base_ci_failed(self) -> None:
-        code, sleeps, out, _ = self._main(
-            [(False, "no report yet")] * 10,
-            [("running", "test in_progress"), ("failed", "test failure")],
+    def test_gives_up_at_once_if_base_ci_finished_without_it(self) -> None:
+        code, sleeps, out, statuses, _ = self._main(
+            [(False, "no coverage/project status yet")] * 3,
+            [("running", "post-coverage-status in_progress"), ("finished", "post-coverage-status skipped")],
+            "--check-name",
+            "post-coverage-status",
         )
         self.assertEqual(code, 0)
         self.assertEqual(sleeps, [10])
+        # Read once more after the job finished, in case it posted in between.
+        self.assertEqual(statuses.call_count, 3)
         self.assertTrue(
             out.endswith(
-                "::warning::Codecov has no coverage for base commit abc123, whose CI didn't succeed (test failure)\n"
+                "::warning::Base commit abc123 has no coverage/project status, "
+                "and its CI has finished (post-coverage-status skipped)\n"
             )
         )
 
-    def test_grace_restarts_if_base_ci_reruns(self) -> None:
-        code, sleeps, _, _ = self._main(
-            [(False, "no report yet")] * 10,
-            [("none", "no test check run"), ("running", "test queued"), ("succeeded", "test success")] * 2,
-            "--grace",
-            "10",
+    def test_status_posted_just_before_the_job_finished(self) -> None:
+        code, sleeps, out, _, _ = self._main(
+            [(False, "no coverage/project status yet"), (True, DESCRIPTION)],
+            [("finished", "post-coverage-status success")],
         )
         self.assertEqual(code, 0)
-        self.assertEqual(sleeps, [10, 10, 10])
+        self.assertEqual(sleeps, [])
+        self.assertTrue(out.endswith(f"Base commit abc123 has its coverage/project status ({DESCRIPTION})\n"))
 
     def test_gives_up_after_timeout(self) -> None:
-        code, sleeps, out, _ = self._main(
-            [(False, "no report yet")] * 10,
-            [("running", "test in_progress")] * 10,
+        code, sleeps, out, _, _ = self._main(
+            [(False, "no coverage/project status yet")] * 10,
+            [("running", "post-coverage-status in_progress")] * 10,
             "--timeout",
             "25",
         )
         self.assertEqual(code, 0)
         self.assertEqual(sleeps, [10, 10])
-        self.assertIn("::warning::Codecov still has no coverage for base commit abc123 after 25 seconds", out)
+        self.assertIn("::warning::Base commit abc123 still has no coverage/project status after 25 seconds", out)
 
     def test_request_timeout_capped_by_deadline(self) -> None:
         now = [0.0]
         timeouts = []
 
-        def request(*args: Any) -> tuple[bool, str]:
+        def request(*args: Any) -> tuple[Any, str]:
             timeouts.append(args[-1])
             now[0] += 4
-            return False, "slow"
+            return (False if len(timeouts) % 2 else "running"), "slow"
 
         def sleep(seconds: float) -> None:
             now[0] += seconds
 
         with (
-            mock.patch("repoutils.commands.wait_for_base_coverage.codecov_coverage", side_effect=request),
+            tempfile.TemporaryDirectory() as tmp,
+            contextlib.chdir(tmp),
+            mock.patch("repoutils.commands.wait_for_base_coverage.base_status", side_effect=request),
             mock.patch("repoutils.commands.wait_for_base_coverage.base_ci_state", side_effect=request),
             contextlib.redirect_stdout(io.StringIO()),
         ):

@@ -83,7 +83,7 @@ CI's `actions-lock` job verifies it.
 - The tests, on Linux and macOS for each supported Python version.
 - Once the tests pass, `just check`, the build and a smoke test of the wheel.
 - Coverage, uploaded to Codecov with the `CODECOV_TOKEN` secret, which doesn't wait for the tests.
-- The patch coverage and long files reports, posted as PR comments on PRs from this repository that aren't Dependabot's.
+- The coverage report (patch, project and the change from the PR's base) and the long files report, posted as PR comments on PRs from this repository that aren't Dependabot's.
 - The project and patch coverage, posted as `coverage/project` and `coverage/patch` commit statuses on `main`'s commits and on PRs that get the comments.
 
 Windows isn't supported for development, as `[tool.uv] environments` leaves it out of `uv.lock`, though repoutils itself is pure Python.

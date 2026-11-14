@@ -41,7 +41,7 @@ diff-cover base='origin/main' *args:
 # The posting recipes run with a write-capable token in CI, so they use
 # the repoutils variable above, installing nothing.
 
-# Post a patch coverage report (default patch-coverage.md) to a PR as a comment, or update the existing one
+# Post a patch coverage report (default patch-coverage.md) to a PR as a comment, or update the existing one (--output <file> writes it there instead)
 [positional-arguments]
 patch-coverage-post *args:
     {{ repoutils }} post-patch-coverage "$@"
@@ -51,10 +51,10 @@ patch-coverage-post *args:
 coverage-status-post *args:
     {{ repoutils }} post-coverage-status "$@"
 
-# Wait (up to 10 minutes) for Codecov to have a PR base commit's coverage: arguments are owner/repo and the base SHA
+# Wait (up to 10 minutes) for a PR base commit's coverage/project status: arguments are owner/repo and the base SHA
 [positional-arguments]
 wait-for-base-coverage *args:
-    {{ repoutils }} wait-for-base-coverage --check-name coverage "$@"
+    {{ repoutils }} wait-for-base-coverage "$@"
 
 # List files over the line limit as Markdown, or post that to a PR (--post <PR>)
 [positional-arguments]
