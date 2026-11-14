@@ -18,8 +18,6 @@ _BLOCK_KEY_RE = re.compile(r"(['\"]?)([A-Za-z_][A-Za-z0-9_-]*)\1\s*:(?:\s+(.*))?
 _ANCHORS_AND_TAGS_RE = re.compile(r"(?:[&!]\S*\s*)+")
 # A job's environment key, with its value if it's on the same line.
 _ENVIRONMENT_RE = re.compile(r"environment\s*:\s*(.*)")
-# The name in an environment mapping, block or flow.
-_NAME_IN_MAPPING_RE = re.compile(r"(?:^|[{,])\s*(['\"]?)name\1\s*:\s*(\"(?:[^\"\\]|\\.)*\"|'(?:[^']|'')*'|[^,}]+)")
 # A job's environment that only an expression gives, so it can't be known.
 UNKNOWN = "${{ }}"
 
@@ -28,15 +26,50 @@ def without_comment(line: str) -> str:
     """line up to its YAML or shell comment: a ``#`` that starts the line or
     follows whitespace, outside quotes. An apostrophe in plain text opens a
     quote, so a comment after one is kept, which only errs towards a use."""
+    escaped = False
     quote = ""
     for i, char in enumerate(line):
-        if quote:
+        if escaped:
+            escaped = False
+        elif quote == '"' and char == "\\":
+            escaped = True
+        elif quote:
             quote = "" if char == quote else quote
         elif char in "'\"":
             quote = char
         elif char == "#" and (i == 0 or line[i - 1].isspace()):
             return line[:i]
     return line
+
+
+def _split(text: str, separator: str) -> list[str]:
+    """text split at each separator outside quotes, as YAML quotes a scalar."""
+    parts = [""]
+    escaped = False
+    quote = ""
+    for char in text:
+        if escaped:
+            escaped = False
+        elif quote == '"' and char == "\\":
+            escaped = True
+        elif quote:
+            quote = "" if char == quote else quote
+        elif char in "'\"":
+            quote = char
+        elif char == separator:
+            parts.append("")
+            continue
+        parts[-1] += char
+    return parts
+
+
+def _mapping_name(entries: list[str]) -> str:
+    """The name in an environment mapping's entries (each ``key: value``), or UNKNOWN."""
+    for entry in entries:
+        key, *value = _split(entry, ":")
+        if value and _unquote(key) == "name":
+            return _unquote(":".join(value))
+    return UNKNOWN
 
 
 def workflow_lines(root: Path) -> list[tuple[str, list[str]]]:
@@ -101,21 +134,18 @@ def _environment(body: list[str]) -> str | None:
         if not match:
             continue
         value = match[1].strip()
-        if value and not value.startswith("{"):
+        if value.startswith("{") and value.endswith("}"):
+            name = _mapping_name(_split(value[1:-1], ","))
+        elif value:
             name = _unquote(value)
         else:
-            if not value:
-                # A block mapping, on the lines indented under environment.
-                mapping: list[str] = []
-                for nested in body[i + 1 :]:
-                    if nested.strip() and _indent(nested) <= indent:
-                        break
-                    mapping.append(nested.strip())
-                value = ",".join(mapping)
-            found = _NAME_IN_MAPPING_RE.search(value)
-            if not found:
-                return UNKNOWN
-            name = _unquote(found[2])
+            # A block mapping, an entry on each line indented under environment.
+            mapping: list[str] = []
+            for nested in body[i + 1 :]:
+                if nested.strip() and _indent(nested) <= indent:
+                    break
+                mapping.append(nested.strip())
+            name = _mapping_name(mapping)
         return UNKNOWN if "${{" in name else name
     return None
 

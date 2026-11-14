@@ -23,6 +23,17 @@ from repoutils import workflows
         ('jobs:\n  a:\n    environment: {name: "pr\\"od", url: x}\n', [("a", 'pr"od')]),
         ("jobs:\n  a:\n    environment: 'it''s'\n", [("a", "it's")]),
         ('jobs:\n  a:\n    environment: "\\x41"\n', [("a", workflows.UNKNOWN)]),
+        # Only the mapping's own name key counts, not one inside a quoted value.
+        (
+            "jobs:\n  a:\n    environment: {url: \"https://x/?q=, name: 'prod'\", name: staging}\n",
+            [("a", "staging")],
+        ),
+        (
+            "jobs:\n  a:\n    environment:\n      url: 'https://x/?name: prod'\n      name: staging\n",
+            [("a", "staging")],
+        ),
+        # An escaped quote doesn't end a quoted name, so a # after it isn't a comment.
+        ('jobs:\n  a:\n    environment: "pr\\"od # x"\n', [("a", 'pr"od # x')]),
         # An anchor or tag doesn't make a job a flow mapping, but what follows it can.
         ("jobs:\n  a: &a\n    environment: prod\n  b: !!map {}\n", [("a", "prod"), ("b", workflows.UNKNOWN)]),
         # A line that isn't a job's id starts no job.
