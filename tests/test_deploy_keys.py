@@ -182,6 +182,15 @@ T = "[tool.repoutils.deploy-keys.k]\n"
         (T + "secret = { name = 'X', env = 'e' }\n", "secret has unknown setting(s): env"),
         (T + "secret = { environment = 'e' }\n", "secret needs a name"),
         (T + "secret = { name = 'X', environment = '' }\n", "environment must be a non-empty string"),
+        (
+            T + "secret = { name = 'S', environment = 'E' }\n[tool.repoutils.deploy-keys.j]\n"
+            "secret = { name = 's', environment = 'e' }\n",
+            "[tool.repoutils.deploy-keys.j] secret is also [tool.repoutils.deploy-keys.k]'s",
+        ),
+        (
+            T + "secret = { name = 'S' }\n[tool.repoutils.deploy-keys.j]\nsecret = { name = 'S' }\n",
+            "[tool.repoutils.deploy-keys.j] secret is also",
+        ),
     ],
 )
 def test_bad_config(tmp_path: Path, config: str, error: str) -> None:
@@ -260,8 +269,17 @@ def test_ensure_creates(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys:
         ("docs", "ssh-ed25519 NEW2 docs", True),
     ]
     assert tools.secret_values == [b"PRIVATE1\n", b"PRIVATE2\n"]
-    assert tools.commands[1] == ["gh", "secret", "set", "RELEASE_DEPLOY_KEY", "--repo", "o/r", "--env", "release"]
-    assert tools.commands[3] == ["gh", "secret", "set", "DOCS_KEY", "--repo", "o/r"]
+    assert tools.commands[1] == [
+        "gh",
+        "secret",
+        "set",
+        "RELEASE_DEPLOY_KEY",
+        "--repo",
+        "github.com/o/r",
+        "--env",
+        "release",
+    ]
+    assert tools.commands[3] == ["gh", "secret", "set", "DOCS_KEY", "--repo", "github.com/o/r"]
     # The temporary directories are gone.
     assert not any(Path(command[command.index("-f") + 1]).parent.exists() for command in tools.commands[::2])
 
@@ -327,7 +345,9 @@ def test_ensure_removes_key_when_secret_fails(
     # The new key is deleted, and the old one, whose secret is unchanged, kept.
     assert gh.keys == old
     assert [call[0] for call in gh.writes()] == ["POST", "DELETE"]
-    assert capsys.readouterr().err == ("gh secret set RELEASE_DEPLOY_KEY --repo o/r --env release failed:\nHTTP 403\n")
+    assert capsys.readouterr().err == (
+        "gh secret set RELEASE_DEPLOY_KEY --repo github.com/o/r --env release failed:\nHTTP 403\n"
+    )
 
 
 @pytest.mark.parametrize(
@@ -475,3 +495,20 @@ def test_bad_config_through_main(
     assert _run(tmp_path, monkeypatch, gh, ["check", "--exit-zero"], T + "write = 1\n") == 1
     assert gh.calls == []
     assert capsys.readouterr().err == "[tool.repoutils.deploy-keys.k] write must be true or false\n"
+
+
+def test_same_secret_name_elsewhere(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # A repository secret and environments' secrets of the same name are different secrets.
+    config = (
+        "[tool.repoutils.deploy-keys.a]\nsecret = { name = 'S' }\n"
+        "[tool.repoutils.deploy-keys.b]\nsecret = { name = 'S', environment = 'release' }\n"
+        "[tool.repoutils.deploy-keys.c]\nsecret = { name = 'S', environment = 'docs' }\n"
+    )
+    gh = FakeGitHub(
+        [_key(1, "a"), _key(2, "b"), _key(3, "c")],
+        {(None, "S"): OLD, ("release", "S"): OLD, ("docs", "S"): OLD},
+        ("release", "docs"),
+    )
+    assert _run(tmp_path, monkeypatch, gh, ["check"], config) == 0
+    # The environments are listed once, for both keys.
+    assert sum(url.startswith(f"{API}/environments?") for _, url, _ in gh.calls) == 1

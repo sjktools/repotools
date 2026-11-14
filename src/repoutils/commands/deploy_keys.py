@@ -98,6 +98,8 @@ def load_deploy_keys(root: Path = Path()) -> list[DeployKey] | None:
     if "deploy-keys" not in config.load(root):
         return None
     keys = []
+    # Each secret's destination, ignoring case as GitHub does, and the title that declares it.
+    destinations: dict[tuple[str | None, str], str] = {}
     for title, entry in config.section("deploy-keys", root).items():
         where = _where(title)
         if not isinstance(entry, dict):
@@ -109,6 +111,14 @@ def load_deploy_keys(root: Path = Path()) -> list[DeployKey] | None:
         if type(write) is not bool:
             raise config.ConfigError(f"{where} write must be true or false")
         secret = _secret(where, entry["secret"]) if "secret" in entry else None
+        if secret is not None:
+            destination = (secret.environment and secret.environment.lower(), secret.name.upper())
+            if destination in destinations:
+                raise config.ConfigError(
+                    f"{where} secret is also {_where(destinations[destination])}'s, "
+                    "so one key's private half would overwrite the other's"
+                )
+            destinations[destination] = title
         keys.append(DeployKey(title, write, secret))
     return keys
 
@@ -252,7 +262,9 @@ def generate(title: str, directory: Path) -> tuple[str, bytes]:
 
 def set_secret(repo: str, token: str, secret: Secret, value: bytes) -> None:
     """Set secret to value with ``gh secret set``, acting with token."""
-    command = ["gh", "secret", "set", secret.name, "--repo", repo]
+    # Name the host, so a GH_HOST for another one doesn't send the secret there.
+    host = urllib.parse.urlsplit(github.API_URL).netloc.removeprefix("api.")
+    command = ["gh", "secret", "set", secret.name, "--repo", f"{host}/{repo}"]
     if secret.environment is not None:
         command += ["--env", secret.environment]
     environ = {**os.environ, "GH_TOKEN": token}
@@ -388,7 +400,7 @@ def main(argv: list[str]) -> int:
         prog="repoutils deploy-keys",
         description=__doc__.split("\n\n")[0].replace("\n", " "),
         epilog="Uses $GITHUB_TOKEN, defaulting to `gh auth token`. It needs the Administration permission "
-        "(write for ensure), and read for Secrets, and for Environments if a secret is an environment's. "
+        "(write for ensure), and read for Secrets, and for Actions and Environments if a secret is an environment's. "
         "ensure also needs write for those to set a secret.",
     )
     subparsers = parser.add_subparsers(dest="mode", required=True, metavar="{check,ensure,dump}")

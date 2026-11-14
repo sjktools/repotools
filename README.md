@@ -638,7 +638,7 @@ With `--fail-on-unexpected` it fails on undeclared read-only keys too.
 `--exit-zero` works as it does for `labels check`.
 
 `ensure` needs a token that can administer the repository, such as a fine-grained token with the Administration write permission and the Secrets write permission.
-An environment's secret needs the Environments write permission instead of Secrets.
+An environment's secret needs the Environments write and Actions read permissions instead of Secrets.
 `check` needs read access to the same things.
 
 `repoutils deploy-keys dump` prints every deploy key the repository has as these tables, with its access.
