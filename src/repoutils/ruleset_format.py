@@ -4,7 +4,6 @@ conversion to and from the JSON GitHub's API and ruleset exports use, for
 ``repoutils rulesets``. Stdlib-only, like every repoutils module."""
 
 import json
-import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -26,7 +25,6 @@ ACTOR_KEYS = ("role", "app", "team", "org-admin", "deploy-keys")
 KEYS = ("target", "enforcement", "include", "exclude", "bypass", "rules")
 # The settings' defaults, which load_rulesets and from_github leave out.
 DEFAULTS: dict[str, Any] = {"target": "branch", "enforcement": "active"}
-_BARE_KEY_RE = re.compile(r"[A-Za-z0-9_-]+")
 
 
 @dataclass(frozen=True)
@@ -147,10 +145,6 @@ def _full_ref(pattern: str, target: str) -> str:
     return pattern if pattern.startswith(("~", "refs/")) else f"{TARGETS[target]}{pattern}"
 
 
-def _toml_key(name: str) -> str:
-    return name if _BARE_KEY_RE.fullmatch(name) else config.toml_string(name)
-
-
 def _toml(value: Any) -> str:
     """value as an inline TOML value."""
     if isinstance(value, bool | str):
@@ -158,7 +152,9 @@ def _toml(value: Any) -> str:
     if isinstance(value, list):
         return "[" + ", ".join(_toml(v) for v in value) + "]"
     if isinstance(value, dict):
-        return "{ " + ", ".join(f"{_toml_key(k)} = {_toml(v)}" for k, v in value.items()) + " }" if value else "{}"
+        return (
+            "{ " + ", ".join(f"{config.toml_key(k)} = {_toml(v)}" for k, v in value.items()) + " }" if value else "{}"
+        )
     return str(value)
 
 
@@ -324,7 +320,7 @@ def load_rulesets(root: Path = Path()) -> dict[str, dict[str, Any]]:
     non-default settings, raising config.ConfigError (a ValueError) if one is malformed."""
     rulesets = {}
     for name, entry in config.section("rulesets", root).items():
-        where = f"{TABLE[:-1]}.{_toml_key(name)}]"
+        where = f"{TABLE[:-1]}.{config.toml_key(name)}]"
         if not isinstance(entry, dict):
             raise config.ConfigError(f"{where} must be a table")
         rulesets[name] = _load_ruleset(where, entry)
@@ -510,7 +506,7 @@ def dump_toml(rulesets: Iterable[dict[str, Any]], names: Names) -> tuple[str, li
     entries, warnings = [], []
     for ruleset in rulesets:
         name, values = ruleset["name"], from_github(ruleset, names)
-        header = f"{TABLE[:-1]}.{_toml_key(name)}"
+        header = f"{TABLE[:-1]}.{config.toml_key(name)}"
         lines = [f"{header}]"] + [f"{key} = {_toml_block(values[key])}" for key in KEYS[:-1] if key in values]
         rules = values.get("rules", {})
         if any(not params for params in rules.values()):

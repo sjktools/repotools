@@ -6,12 +6,15 @@ Every setting has a default, so a project with no table (or no
 
 import json
 import math
+import re
 import tomllib
 from pathlib import Path
 from typing import Any
 
 PYPROJECT = "pyproject.toml"
 DEFAULT_COMMENT_PREFIX = "repoutils"
+# A key TOML allows unquoted.
+_BARE_KEY_RE = re.compile(r"[A-Za-z0-9_-]+")
 
 
 class ConfigError(ValueError):
@@ -114,6 +117,11 @@ def toml_string(value: str) -> str:
     """value as a TOML basic string, quoted and escaped, for output to paste into pyproject.toml."""
     # JSON's escapes are all valid TOML, but JSON leaves DEL unescaped, which TOML forbids.
     return json.dumps(value, ensure_ascii=False).replace("\x7f", "\\u007f")
+
+
+def toml_key(name: str) -> str:
+    """name as a TOML key: bare if it can be, else quoted."""
+    return name if _BARE_KEY_RE.fullmatch(name) else toml_string(name)
 
 
 def toml_value(value: bool | int | str | list[str]) -> str:
