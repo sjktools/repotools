@@ -84,7 +84,7 @@ CI's `actions-lock` job verifies it.
 - Once the tests pass, `just check`, the build and a smoke test of the wheel.
 - Coverage, uploaded to Codecov with the `CODECOV_TOKEN` secret, which doesn't wait for the tests.
 - The patch coverage and long files reports, posted as PR comments on PRs from this repository that aren't Dependabot's.
-- On pushes to `main`, the coverage job's figure posted as a `coverage/project` commit status, which keeps a history of it.
+- The project and patch coverage, posted as `coverage/project` and `coverage/patch` commit statuses on `main`'s commits and on PRs that get the comments.
 
 Windows isn't supported for development, as `[tool.uv] environments` leaves it out of `uv.lock`, though repoutils itself is pure Python.
 On Dependabot PRs, the `dependabot-fix` job re-locks with our uv and syncs the dependency minimums.

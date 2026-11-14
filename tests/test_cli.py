@@ -199,8 +199,8 @@ def test_comment_posters(
         ),
         (
             ["post-coverage-status", "0" * 40],
-            "[tool.repoutils.coverage]\nstatus-name = 3\n",
-            "[tool.repoutils.coverage] status-name must be a non-empty string of 255 characters at most",
+            "[tool.repoutils.coverage]\nproject-status = 3\n",
+            "[tool.repoutils.coverage] project-status must be a non-empty string of 255 characters at most",
             False,
         ),
     ],

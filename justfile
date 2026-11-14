@@ -46,7 +46,7 @@ diff-cover base='origin/main' *args:
 patch-coverage-post *args:
     {{ repoutils }} post-patch-coverage "$@"
 
-# Post the coverage in coverage.xml as a commit status on a commit (argument: its SHA)
+# Post the coverage in coverage.xml (and --patch-report) as commit statuses on a commit (argument: its SHA)
 [positional-arguments]
 coverage-status-post *args:
     {{ repoutils }} post-coverage-status "$@"

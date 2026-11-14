@@ -45,7 +45,7 @@ That installs only repoutils, hash-checked against `uv.lock`, and not the projec
 | `post-comment` | Posts a Markdown file to a PR, editing the earlier comment or hiding it with `--hide-previous`. |
 | `added-strings` | Lists the lines a PR adds that have strings `pyproject.toml` configures, such as `# noqa:`, or posts that to a PR, for information only. |
 | `post-patch-coverage` | Posts diff-cover's Markdown patch coverage report to a PR, reformatted. |
-| `post-coverage-status` | Posts a project's coverage from `coverage.xml` as a commit status, as a record of it and not a gate. |
+| `post-coverage-status` | Posts a commit's project and patch coverage as commit statuses, as a record and not a gate. |
 | `wait-for-base-coverage` | Waits for Codecov to have a PR base commit's coverage, so the PR's comparison works. |
 | `post-screenshots` | Uploads a directory of PNGs and posts them to a PR as a comment. |
 | `recreate-pr` | Recreates a PR as a draft from the same branch and closes the original. |
@@ -73,9 +73,10 @@ comment-prefix = "repoutils"
 # The branch to compare with when there's no PR base.
 default-branch = "main"
 
-# The name of the commit status `repoutils post-coverage-status` posts; see below.
+# The names of the commit statuses `repoutils post-coverage-status` posts; see below.
 [tool.repoutils.coverage]
-status-name = "coverage/project"
+project-status = "coverage/project"
+patch-status = "coverage/patch"
 
 [tool.repoutils.sentence-per-line]
 files = ["AGENTS.md", "README.md"]
@@ -243,26 +244,33 @@ If a later push removes them all, it updates the earlier comment to say so, rath
 
 ### Coverage status
 
-`repoutils post-coverage-status <sha>` reads the project's coverage from `coverage.xml` and posts it on the commit as a status named `coverage/project`.
-Run it on each push to the default branch, and that branch's statuses become a history of its coverage.
-A PR's checks can then read its base commit's status to compare against.
+`repoutils post-coverage-status <sha>` posts a commit's coverage as two statuses on it, named `coverage/project` and `coverage/patch`.
+The project status comes from `coverage.xml`, and covers the whole project.
+The patch status comes from diff-cover's JSON report (`--patch-report`), and covers the lines that a PR, or a commit outside one, changes.
 
-The status is always `success`, because it records coverage and doesn't judge it.
-Its description is the figure in one fixed format, so other tools can parse it:
+Post them on each commit of the default branch, and on each PR's head, wherever the token can.
+The default branch's project statuses then become a history of its coverage.
+Given `--base`, the PR's base or the commit's parent, the project status also shows the change from that commit's project status.
+If that commit has none yet, the status leaves the change out.
+
+Both are always `success`, because they record coverage and don't judge it.
+Their descriptions are the figures in one fixed format, so other tools can parse them:
 
 ```text
-96.52% (2114/2172 lines, 610/650 branches)
+96.52% (2114/2172 lines, 610/650 branches), +0.12 points from 1a2b3c4
+92.30% (12/13 lines)
 ```
 
-The percentage is coverage.py's total, which counts covered lines and branches together.
+The project figure is coverage.py's total, which counts covered lines and branches together.
 It's cut to two decimal places rather than rounded, so it shows 100.00% only when nothing is missed.
-The branches part appears only when the report measured branches.
+Its branches part appears only when the report measured branches.
+The change is the difference between the two figures as shown.
+The patch figure counts lines as diff-cover does, and reads `no changed lines to cover` when there are none.
 
 A token that can post statuses can post one under any name, including a required check's.
-So post from a job of its own that installs nothing, and hand it `coverage.xml` as an artifact.
-That job needs `statuses: write`.
-Post from the default branch's own run, since a squash merge gives the commit a new SHA.
-`--dry-run` prints the status without posting it.
+So post from a job of its own that installs nothing, and hand it the reports as an artifact.
+That job needs `statuses: write`, which a fork's or Dependabot's PR doesn't get.
+`--dry-run` prints the statuses without posting them.
 
 ### Labels
 

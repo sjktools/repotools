@@ -45,6 +45,8 @@ def test_percent() -> None:
         "97.3% (2114/2172 lines)",
         "97.31% (2114/2172 lines) ",
         "97.31% (2114/2172 lines, 1/2)",
+        "50.00% (1/2 lines), +1.00 points",
+        "50.00% (1/2 lines), 1.00 points from 1a2b3c4",
         # Doesn't add up.
         "50.00% (2114/2172 lines)",
         "1.00% (0/0 lines)",
@@ -116,23 +118,107 @@ def test_read_real_coverage_report(tmp_path: Path) -> None:
     assert totals.percent == pytest.approx(total, abs=1e-4)
 
 
-def test_status_name(tmp_path: Path) -> None:
-    assert coverage_status.status_name(tmp_path) == "coverage/project"
-    (tmp_path / "pyproject.toml").write_text('[tool.repoutils.coverage]\nstatus-name = "cov"\n')
-    assert coverage_status.status_name(tmp_path) == "cov"
+def test_status_names(tmp_path: Path) -> None:
+    assert coverage_status.status_names(tmp_path) == ("coverage/project", "coverage/patch")
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.repoutils.coverage]\nproject-status = "cov"\npatch-status = "cov/diff"\n'
+    )
+    assert coverage_status.status_names(tmp_path) == ("cov", "cov/diff")
 
 
+@pytest.mark.parametrize("key", ["project-status", "patch-status"])
 @pytest.mark.parametrize("value", ["3", '""', '" "', '"' + "x" * 256 + '"'])
-def test_bad_status_name(tmp_path: Path, value: str) -> None:
-    (tmp_path / "pyproject.toml").write_text(f"[tool.repoutils.coverage]\nstatus-name = {value}\n")
-    with pytest.raises(config.ConfigError, match="status-name must be a non-empty string"):
-        coverage_status.status_name(tmp_path)
+def test_bad_status_name(tmp_path: Path, key: str, value: str) -> None:
+    (tmp_path / "pyproject.toml").write_text(f"[tool.repoutils.coverage]\n{key} = {value}\n")
+    with pytest.raises(config.ConfigError, match=f"{key} must be a non-empty string"):
+        coverage_status.status_names(tmp_path)
+
+
+def test_same_status_names(tmp_path: Path) -> None:
+    (tmp_path / "pyproject.toml").write_text('[tool.repoutils.coverage]\npatch-status = "coverage/project"\n')
+    with pytest.raises(config.ConfigError, match="project-status and patch-status must differ"):
+        coverage_status.status_names(tmp_path)
+
+
+BASE_SHA = "1a2b3c4d" + "0" * 32
+
+
+@pytest.mark.parametrize(
+    ("totals", "base", "description"),
+    [
+        (Totals(1, 2), None, "50.00% (1/2 lines)"),
+        (Totals(3, 4), Totals(1, 2), "75.00% (3/4 lines), +25.00 points from 1a2b3c4"),
+        (Totals(1, 3), Totals(1, 2), "33.33% (1/3 lines), -16.67 points from 1a2b3c4"),
+        (Totals(1, 2), Totals(2, 4), "50.00% (1/2 lines), +0.00 points from 1a2b3c4"),
+        # The change between the figures as shown, so it adds up for a reader.
+        (Totals(2, 3), Totals(1, 3), "66.66% (2/3 lines), +33.33 points from 1a2b3c4"),
+    ],
+)
+def test_project_description(totals: Totals, base: Totals | None, description: str) -> None:
+    assert coverage_status.project_description(totals, base, BASE_SHA) == description
+    assert coverage_status.parse_description(description) == totals
+
+
+@pytest.mark.parametrize(
+    ("totals", "description"),
+    [(Totals(12, 13), "92.30% (12/13 lines)"), (Totals(0, 0), "no changed lines to cover")],
+)
+def test_patch_description(totals: Totals, description: str) -> None:
+    assert coverage_status.patch_description(totals) == description
+
+
+def test_read_patch_report(tmp_path: Path) -> None:
+    path = tmp_path / "patch.json"
+    path.write_text('{"total_num_lines": 13, "total_num_violations": 1, "src_stats": {}}')
+    assert coverage_status.read_patch_report(path) == Totals(12, 13)
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("{", "not valid JSON"),
+        ("[]", "not a diff-cover JSON report"),
+        ('{"total_num_lines": 1}', "not a diff-cover JSON report"),
+        ('{"total_num_lines": true, "total_num_violations": 0}', "not a diff-cover JSON report"),
+        ('{"total_num_lines": -1, "total_num_violations": 0}', "not a diff-cover JSON report"),
+        ('{"total_num_lines": 1, "total_num_violations": 2}', "misses more lines"),
+    ],
+)
+def test_read_patch_report_rejects(tmp_path: Path, text: str, message: str) -> None:
+    path = tmp_path / "patch.json"
+    path.write_text(text)
+    with pytest.raises(ValueError, match=message):
+        coverage_status.read_patch_report(path)
+
+
+def test_read_real_patch_report(tmp_path: Path) -> None:
+    """What the installed diff-cover writes parses."""
+
+    def run(*args: str | Path) -> None:
+        subprocess.run(args, cwd=tmp_path, check=True, capture_output=True)
+
+    git = ("git", "-c", "user.name=t", "-c", "user.email=t@example.com")
+    run(*git, "init", "-q", "-b", "main")
+    (tmp_path / "a.py").write_text("a = 1\n")
+    run(*git, "add", "a.py")
+    run(*git, "commit", "-qm", "base")
+    (tmp_path / "a.py").write_text("a = 1\nb = 2\nc = 3\n")
+    run(*git, "commit", "-qam", "change")
+    (tmp_path / "coverage.xml").write_text(
+        '<?xml version="1.0" ?><coverage version="7"><sources><source>.</source></sources>'
+        '<packages><package name="."><classes><class name="a.py" filename="a.py"><lines>'
+        '<line number="1" hits="1"/><line number="2" hits="1"/><line number="3" hits="0"/>'
+        "</lines></class></classes></package></packages></coverage>"
+    )
+    diff_cover = Path(sys.executable).parent / "diff-cover"
+    run(diff_cover, "coverage.xml", "--compare-branch=HEAD^", "--format", "json:patch.json")
+    assert coverage_status.read_patch_report(tmp_path / "patch.json") == Totals(1, 2)
 
 
 def test_post_status() -> None:
     with mock.patch("repoutils.github.request") as request:
-        coverage_status.post_status("o/r", "abc", "cov", Totals(1, 2), "tok", "https://run")
-        coverage_status.post_status("o/r", "abc", "cov", Totals(1, 2), "tok")
+        coverage_status.post_status("o/r", "abc", "cov", "50.00% (1/2 lines)", "tok", "https://run")
+        coverage_status.post_status("o/r", "abc", "cov", "50.00% (1/2 lines)", "tok")
     assert request.call_args_list == [
         mock.call(
             "POST",
