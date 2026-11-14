@@ -402,7 +402,7 @@ creation = true
 Rules and their parameters have the names that GitHub's REST API and a ruleset's JSON export use, in kebab case.
 So `non_fast_forward` is `rules.non-fast-forward`.
 A tag ruleset can have only the rules GitHub's ruleset page offers for tags.
-Those are `creation`, `update`, `deletion`, `required-linear-history`, `required-deployments`, `required-signatures`, `non-fast-forward`, `tag-name-pattern` and the three commit metadata patterns.
+Those are `creation`, `update`, `deletion`, `required-linear-history`, `required-deployments`, `required-signatures`, `required-status-checks`, `non-fast-forward`, `tag-name-pattern` and the three commit metadata patterns.
 `tag-name-pattern` is for tag rulesets only, and `check` refuses a rule in the wrong kind of ruleset.
 A parameter left out has the default that GitHub's ruleset page gives a new rule, which is off, 0 or empty.
 The exceptions are `pull-request.allowed-merge-methods`, which allows all three methods, and `merge-queue`, which takes the page's values.

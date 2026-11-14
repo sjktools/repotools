@@ -83,7 +83,8 @@ RULES: dict[str, dict[str, Any]] = {
     "code_scanning": {"code_scanning_tools": []},
     "copilot_code_review": {"review_draft_pull_requests": False, "review_on_push": False},
 }
-# The rules a tag ruleset can have: GitHub's ruleset page offers the rest for branches only.
+# The rules a tag ruleset can have. GitHub's docs say required status checks
+# apply to a branch or tag, while pull requests, merge queues and the like are for branches only.
 TAG_RULES = {
     "creation",
     "update",
@@ -91,6 +92,7 @@ TAG_RULES = {
     "required_linear_history",
     "required_deployments",
     "required_signatures",
+    "required_status_checks",
     "non_fast_forward",
     "commit_message_pattern",
     "commit_author_email_pattern",
@@ -265,7 +267,7 @@ def _load_ruleset(where: str, entry: dict[str, Any]) -> dict[str, Any]:
         raise config.ConfigError(f"{where} has unknown setting(s): {', '.join(unknown)}")
     ruleset: dict[str, Any] = {}
     target = entry.get("target", "branch")
-    if target not in TARGETS:
+    if not isinstance(target, str) or target not in TARGETS:
         raise config.ConfigError(
             f"{where} target must be one of {', '.join(map(config.toml_string, TARGETS))} "
             "(repoutils doesn't manage push rulesets)"

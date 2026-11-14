@@ -207,6 +207,7 @@ def test_diff_names_only_the_list_items_that_differ() -> None:
     [
         ('main = "x"', "rulesets.main] must be a table"),
         ("main.target = 'push'", 'target must be one of "branch", "tag" (repoutils doesn\'t manage push rulesets)'),
+        ("main.target = []", 'target must be one of "branch", "tag"'),
         ("main.target = 'tag'\nmain.include = []", 'needs include, the tags it targets (e.g. ["v*"])'),
         ("main.target = 'tag'\nmain.include = ['~DEFAULT_BRANCH']", "names ~DEFAULT_BRANCH, which isn't a tag"),
         ("main.target = 'tag'\nmain.include = ['refs/heads/main']", "names refs/heads/main, which isn't a tag"),
@@ -283,6 +284,9 @@ required-signatures = true
 [tool.repoutils.rulesets.tags.rules.tag-name-pattern]
 operator = "regex"
 pattern = "^v[0-9]"
+
+[tool.repoutils.rulesets.tags.rules.required-status-checks]
+required-status-checks = [{ context = "test", app = "github-actions" }]
 """
 
 
