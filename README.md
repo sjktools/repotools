@@ -173,6 +173,7 @@ other = ["ORG_DEPLOY_KEY"]
 dependabot-alerts = true
 secret-protection = true
 push-protection = true
+immutable-releases = true
 
 # The deployment environments `repoutils environments` checks or creates; see below.
 [tool.repoutils.environments.pypi]
@@ -648,12 +649,12 @@ If two keys share a title, it prints that title once and warns.
 
 ### Security settings
 
-`[tool.repoutils.security-settings]` covers the settings on a repository's Advanced Security settings page that GitHub's REST API can read and change.
+`[tool.repoutils.security-settings]` covers the settings on a repository's Advanced Security settings page that GitHub's REST API can read and change, and release immutability.
 Each one is `true` or `false`.
 All of them are optional, but `check` and `ensure` fail if the table doesn't set any.
 A setting the table leaves out stays as it is on GitHub.
 
-| Setting | On GitHub's Advanced Security page |
+| Setting | On GitHub's settings pages |
 |---|---|
 | `private-vulnerability-reporting` | Private vulnerability reporting |
 | `dependabot-alerts` | Dependabot alerts |
@@ -661,11 +662,14 @@ A setting the table leaves out stays as it is on GitHub.
 | `codeql-default-setup` | CodeQL analysis, with the default setup (on) or not set up (off) |
 | `secret-protection` | Secret Protection |
 | `push-protection` | Push protection, under Secret Protection |
+| `immutable-releases` | Enable release immutability, under Releases on the General page |
 
 The page has other settings that GitHub's API can't read or change on their own, so the table rejects them.
 They are the dependency graph, automatic dependency submission, Dependabot malware alerts, grouped security updates and Copilot Autofix.
 Turning on `dependabot-alerts` also turns on the dependency graph.
 `codeql-default-setup` only turns CodeQL on or off, and leaves its languages and query suite to GitHub.
+Immutable releases stop anyone changing a published release's assets, or moving or deleting its tag.
+They protect a release only once it's published, so they don't replace a tag ruleset that limits who can push a release tag.
 
 Some settings need others.
 Dependabot security updates need Dependabot alerts, and push protection needs secret protection.
@@ -676,7 +680,7 @@ If it turns one on and leaves out the one it needs, which is off on GitHub, GitH
 `repoutils security-settings ensure` changes every setting that differs, then reads them all back.
 It fails if GitHub didn't apply one.
 That can happen when the repository's plan doesn't offer the setting, such as CodeQL on a private repository without GitHub Code Security.
-It can also happen when an organization's security configuration controls the setting.
+It can also happen when an organization's settings control it, such as a security configuration or an organization that enforces immutable releases.
 GitHub turns on CodeQL default setup by starting a run, so `ensure` waits up to two minutes for it.
 
 `repoutils security-settings check` changes nothing, and fails in exactly the cases where `ensure` would change something.
