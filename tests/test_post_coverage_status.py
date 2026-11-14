@@ -85,6 +85,13 @@ def test_bad_report(
     assert message in capsys.readouterr().err
 
 
+def test_bad_setting(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    (tmp_path / "pyproject.toml").write_text("[tool.repoutils.coverage]\nstatus-name = 3\n")
+    code, requests = _run(tmp_path, monkeypatch)
+    assert (code, requests) == (1, [])
+    assert "status-name must be a non-empty string" in capsys.readouterr().err
+
+
 def test_bad_sha(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     monkeypatch.chdir(tmp_path)
     with pytest.raises(SystemExit) as exit_info:

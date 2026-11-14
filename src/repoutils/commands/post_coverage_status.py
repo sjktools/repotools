@@ -43,8 +43,9 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--dry-run", action="store_true", help="print the status it would post, and post nothing")
     args = parser.parse_args(argv)
 
-    name = coverage_status.status_name()
     try:
+        # ConfigError is a ValueError, so a bad setting fails here too, even when main() is called directly.
+        name = coverage_status.status_name()
         totals = coverage_status.read_report(args.report)
     except (OSError, ValueError) as e:
         print(e, file=sys.stderr)
