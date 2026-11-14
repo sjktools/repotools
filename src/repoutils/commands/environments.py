@@ -56,7 +56,6 @@ DEFAULTS: dict[str, Any] = {
 }
 # The order dump writes them in.
 KEYS = list(DEFAULTS)
-_BARE_KEY_RE = re.compile(r"[A-Za-z0-9_-]+")
 _REVIEWER_RE = re.compile(r"[A-Za-z0-9-]+(/[A-Za-z0-9._-]+)?")
 
 
@@ -112,7 +111,7 @@ def load_environments(root: Path = Path()) -> list[Environment]:
     environments: list[Environment] = []
     seen: set[str] = set()
     for name, entry in table.items():
-        where = f"{TABLE[:-1]}.{_toml_key(name)}]"
+        where = f"{TABLE[:-1]}.{config.toml_key(name)}]"
         if not isinstance(entry, dict):
             raise config.ConfigError(f"{where} must be a table")
         if name.lower() in seen:
@@ -128,10 +127,6 @@ def load_environments(root: Path = Path()) -> list[Environment]:
                 )
         environments.append(Environment(name, settings))
     return environments
-
-
-def _toml_key(name: str) -> str:
-    return name if _BARE_KEY_RE.fullmatch(name) else config.toml_string(name)
 
 
 def reviewer_name(owner: str, reviewer: dict[str, Any]) -> str:
@@ -248,7 +243,7 @@ def plans(repo: str, token: str, environments: Sequence[Environment]) -> tuple[l
             # An environment's reviewing teams can only be its owner's.
             if team and org.lower() != owner.lower():
                 raise config.ConfigError(
-                    f"{TABLE[:-1]}.{_toml_key(environment.name)}] reviewers can only name {owner}'s teams, "
+                    f"{TABLE[:-1]}.{config.toml_key(environment.name)}] reviewers can only name {owner}'s teams, "
                     f"not {reviewer!r}"
                 )
     existing = repo_environments(repo, token)
@@ -337,7 +332,7 @@ def dump_toml(owner: str, existing: Iterable[tuple[dict[str, Any], list[dict[str
     entries = []
     for env, policies in existing:
         values = current(owner, env, policies)
-        lines = [f"{TABLE[:-1]}.{_toml_key(env['name'])}]"]
+        lines = [f"{TABLE[:-1]}.{config.toml_key(env['name'])}]"]
         for key in KEYS:
             if key in POLICY_KEYS and values["deployment-branches"] != "selected":
                 continue

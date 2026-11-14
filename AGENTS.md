@@ -30,6 +30,8 @@ It supports Python 3.12 and later, so don't use newer syntax or `typing` feature
   `src/repoutils/ruleset_labels.py` gives the labels GitHub's ruleset page uses, which `dump` writes as comments.
 - `src/repoutils/github.py` holds the GitHub API helpers the posting commands share.
   They are a request function that never follows a redirect with the token to another host, paginated comment listing, `upsert_comment` and `hide_comments`.
+- `src/repoutils/workflows.py` reads the workflows in `.github/workflows` for the secrets they use and each job's environment, without a YAML parser.
+  `secrets check-workflows` uses it.
 - `src/repoutils/markdown.py` holds the Markdown reading that `check-sentence-per-line` and `check-prose` share.
   It skips code fences and splits a document's prose into sentences.
 - `tests/test_<module>.py` tests each module, and `tests/test_cli.py` runs every command through `cli.main()`.
