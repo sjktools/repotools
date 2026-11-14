@@ -128,6 +128,9 @@ allowed-tags = []
 deployment-branches = "selected"
 allowed-branches = []
 allowed-tags = ["v*"]
+reviewers = ["skissane"]
+prevent-self-review = false
+can-admins-bypass = false
 
 [tool.repoutils.environments.testpypi]
 deployment-branches = "all"

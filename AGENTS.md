@@ -99,7 +99,7 @@ The Bump Version workflow, run from `main`, opens a PR bumping `version` in `pyp
 Once it merges, the `release` job in `ci.yml` pushes the tag `v<version>` over SSH with the `RELEASE_DEPLOY_KEY` deploy key, which triggers the Publish workflow.
 It then creates the GitHub release with the job's own `GITHUB_TOKEN`.
 `publish-pypi.yml` builds once, publishes to TestPyPI and checks the release installs from there.
-Only then does it publish the same files to PyPI, and check they install from PyPI.
+Only then, once a maintainer approves the `pypi` environment deployment, does it publish the same files to PyPI, and check they install from PyPI.
 It publishes with PEP 740 attestations, through trusted publishing (no API token).
 
 `GH_ACTIONS_TOKEN` and `RELEASE_DEPLOY_KEY` live in the `release` environment, which only `main` can deploy to, so a workflow run from any other branch can't read them.
