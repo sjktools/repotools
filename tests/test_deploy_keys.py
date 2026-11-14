@@ -242,6 +242,13 @@ def test_check_secret_and_environment_missing(
         "docs: secret DOCS_KEY is missing",
         "x: 2 deploy keys have this title: delete all but one on GitHub",
     ]
+    # A missing key says its environment is missing too, which stops ensure creating it.
+    assert _run(tmp_path, monkeypatch, FakeGitHub([], environments=()), ["check"]) == 1
+    assert capsys.readouterr().out.splitlines()[:3] == [
+        "release: missing",
+        "release: environment release, which holds its secret RELEASE_DEPLOY_KEY, is missing",
+        "docs: missing",
+    ]
 
 
 def test_empty_table_forbids_write_keys(

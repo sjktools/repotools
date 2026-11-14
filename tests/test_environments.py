@@ -502,3 +502,20 @@ def test_reviewing_teams_must_be_the_owners(
     # The owner's name ignores case, as on GitHub.
     assert _run(tmp_path, monkeypatch, FakeGitHub([_env("pypi")]), ["check"], TABLE + "reviewers = ['O/devs']\n") == 1
     assert "can only name" not in capsys.readouterr().err
+
+
+def test_missing_environment_reports_what_it_gets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Not as differences from GitHub's defaults, which read as if the environment existed.
+    config = "[tool.repoutils.environments.release]\nallowed-branches = ['main']\nwait-timer = 5\n"
+    gh = FakeGitHub([])
+    assert _run(tmp_path, monkeypatch, gh, ["check"], config) == 1
+    assert capsys.readouterr().out.splitlines()[0] == (
+        'release: missing (ensure creates it with deployment-branches = "selected", '
+        'allowed-branches = ["main"], wait-timer = 5)'
+    )
+    assert _run(tmp_path, monkeypatch, gh, ["ensure"], config) == 0
+    assert capsys.readouterr().out.splitlines()[0] == (
+        'release: created (with deployment-branches = "selected", allowed-branches = ["main"], wait-timer = 5)'
+    )

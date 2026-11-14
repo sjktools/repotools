@@ -187,7 +187,9 @@ class Status:
 
     def problems(self) -> list[str]:
         if not self.existing:
-            return ["missing"]
+            # ensure can't create the key until its secret's environment exists, so say so now.
+            secret = self.secret_problem() if self.environment_missing else None
+            return ["missing"] + ([secret] if secret else [])
         if len(self.existing) > 1:
             return [f"{len(self.existing)} deploy keys have this title: delete all but one on GitHub"]
         problems = []

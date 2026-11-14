@@ -319,10 +319,19 @@ def _report(p: Plan, *, done: bool) -> list[str]:
     lines = []
     if p.needs_ensure:
         if p.existing_name is None:
+            # Not differences from what GitHub has, as it has nothing: what the new environment gets.
+            settings = ", ".join(
+                f"{key} = {config.toml_value(p.environment.settings[key])}"
+                for key in KEYS
+                if key in p.environment.settings
+            )
             status = "created" if done else "missing"
+            if settings:
+                status += f" (with {settings})" if done else f" (ensure creates it with {settings})"
+            lines.append(f"{name}: {status}")
         else:
             status = "updated" if done else "needs updating"
-        lines.append(f"{name}: {status}: {'; '.join(p.changes)}" if p.changes else f"{name}: {status}")
+            lines.append(f"{name}: {status}: {'; '.join(p.changes)}" if p.changes else f"{name}: {status}")
     lines += [f"{name}: {note}" for note in p.notes]
     return lines
 
