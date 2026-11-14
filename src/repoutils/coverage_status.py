@@ -207,9 +207,9 @@ def latest_status(repo: str, sha: str, name: str, token: str) -> dict[str, Any] 
             "GET", f"{github.API_URL}/repos/{repo}/commits/{sha}/status?per_page=100&page={page}", token
         )
         statuses: list[dict[str, Any]] = combined["statuses"]
-        # The combined status holds only the latest status for each name.
+        # The combined status holds only the latest status for each name, which GitHub matches ignoring case.
         for status in statuses:
-            if status["context"] == name:
+            if status["context"].casefold() == name.casefold():
                 return status
         if len(statuses) < 100:
             return None

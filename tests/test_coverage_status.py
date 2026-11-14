@@ -262,6 +262,13 @@ def test_read_status() -> None:
     ]
 
 
+def test_read_status_ignores_case() -> None:
+    urls: list[str] = []
+    pages = [[{"context": "Coverage/Project", "description": "50.00% (1/2 lines)"}]]
+    with mock.patch("repoutils.github.request", _fake_statuses(pages, urls)):
+        assert coverage_status.read_status("o/r", "abc", "coverage/project", "tok") == Totals(1, 2)
+
+
 def test_read_status_missing() -> None:
     urls: list[str] = []
     with mock.patch("repoutils.github.request", _fake_statuses([[{"context": "ci", "description": None}]], urls)):
