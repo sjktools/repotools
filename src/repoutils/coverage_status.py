@@ -56,7 +56,9 @@ class Totals:
 
 
 def _count(root: ET.Element, name: str, path: Path) -> int:
-    value = root.get(name, "0")
+    value = root.get(name)
+    if value is None:
+        raise ValueError(f"{path}: the report has no {name}")
     if not (value.isascii() and value.isdigit()):
         raise ValueError(f"{path}: {name} is {value!r}, not a whole number")
     return int(value)
@@ -73,7 +75,8 @@ def read_report(path: Path) -> Totals:
     if root.tag != "coverage" or "lines-valid" not in root.attrib:
         raise ValueError(f"{path}: not a Cobertura coverage report")
     totals = Totals(*(_count(root, name, path) for name in ("lines-covered", "lines-valid")))
-    if root.get("branches-valid") is not None:
+    # A report without branch data has neither branch count.
+    if "branches-valid" in root.attrib or "branches-covered" in root.attrib:
         totals = Totals(
             totals.lines_covered,
             totals.lines_valid,
@@ -99,7 +102,12 @@ def parse_description(description: str) -> Totals:
         int(m["branches_covered"] or 0),
         int(m["branches_valid"] or 0),
     )
-    if totals.lines_valid + totals.branches_valid == 0 or totals.description() != description:
+    if (
+        totals.lines_valid + totals.branches_valid == 0
+        or totals.lines_covered > totals.lines_valid
+        or totals.branches_covered > totals.branches_valid
+        or totals.description() != description
+    ):
         raise ValueError(f"coverage status description doesn't add up: {description!r}")
     return totals
 

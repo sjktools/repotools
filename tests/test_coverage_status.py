@@ -49,6 +49,8 @@ def test_percent() -> None:
         "50.00% (2114/2172 lines)",
         "1.00% (0/0 lines)",
         "100.00% (5/4 lines)",
+        # Adds up overall, but covers more lines than it measured.
+        "100.00% (2/1 lines, 0/1 branches)",
     ],
 )
 def test_parse_rejects(description: str) -> None:
@@ -77,6 +79,9 @@ def test_read_report_without_branches(tmp_path: Path) -> None:
         (_xml(lines_valid="2", lines_covered="x"), "lines-covered is 'x', not a whole number"),
         (_xml(lines_valid="-1", lines_covered="0"), "lines-valid is '-1'"),
         (_xml(lines_valid="2", lines_covered="1", branches_valid="2", branches_covered="1.5"), "branches-covered"),
+        (_xml(lines_valid="2"), "has no lines-covered"),
+        (_xml(lines_valid="2", lines_covered="1", branches_valid="2"), "has no branches-covered"),
+        (_xml(lines_valid="2", lines_covered="1", branches_covered="2"), "has no branches-valid"),
         (_xml(lines_valid="0", lines_covered="0"), "measured no lines"),
         (_xml(lines_valid="2", lines_covered="3"), "covers more"),
         (_xml(lines_valid="2", lines_covered="2", branches_valid="1", branches_covered="2"), "covers more"),
