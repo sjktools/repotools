@@ -118,10 +118,12 @@ environments.release = ["GH_ACTIONS_TOKEN", "RELEASE_DEPLOY_KEY"]
 [tool.repoutils.environments.release]
 deployment-branches = "selected"
 allowed-branches = ["main"]
+allowed-tags = []
 
-# publish-pypi.yml's environments. Only a v* tag (a release) may deploy to pypi, so a run of
-# a PR branch's copy of the workflow (which /testpypi dispatches) can't publish
-# to PyPI through trusted publishing; testpypi stays open for /testpypi.
+# publish-pypi.yml's environments. Only a v* tag (a release) may deploy to
+# pypi, so a run of a PR branch's copy of the workflow (which /testpypi
+# dispatches) can't publish to PyPI through trusted publishing; testpypi stays
+# open for /testpypi.
 [tool.repoutils.environments.pypi]
 deployment-branches = "selected"
 allowed-branches = []
