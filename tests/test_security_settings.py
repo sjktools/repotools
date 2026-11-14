@@ -25,6 +25,7 @@ TOGGLES = {
     "private-vulnerability-reporting": "private-vulnerability-reporting",
     "dependabot-alerts": "vulnerability-alerts",
     "dependabot-security-updates": "automated-security-fixes",
+    "immutable-releases": "immutable-releases",
 }
 
 
@@ -80,6 +81,8 @@ class FakeGitHub:
             return None
         if path == "private-vulnerability-reporting":
             return {"enabled": self.state["private-vulnerability-reporting"]}
+        if path == "immutable-releases":
+            return {"enabled": self.state["immutable-releases"], "enforced_by_owner": False}
         if path == "code-scanning/default-setup":
             return self._codeql(method, json_body)
         raise AssertionError(f"unexpected {method} {path}")
@@ -220,11 +223,12 @@ def test_ensure_turns_settings_on_in_order(
         ("PATCH", "code-scanning/default-setup", {"state": "configured"}),
         ("PATCH", "", {"security_and_analysis": {"secret_scanning": {"status": "enabled"}}}),
         ("PATCH", "", {"security_and_analysis": {"secret_scanning_push_protection": {"status": "enabled"}}}),
+        ("PUT", "immutable-releases", None),
     ]
     out = capsys.readouterr().out
     assert "GitHub started CodeQL default setup: https://run\n" in out
     assert "updated: dependabot-alerts is false on GitHub, not true\n" in out
-    assert out.endswith("Updated 6 of 6 setting(s) in o/r.\n")
+    assert out.endswith("Updated 7 of 7 setting(s) in o/r.\n")
 
 
 def test_ensure_turns_settings_off_in_reverse_order(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -233,6 +237,7 @@ def test_ensure_turns_settings_off_in_reverse_order(tmp_path: Path, monkeypatch:
     assert _run(tmp_path, monkeypatch, gh, ["ensure"], pyproject) == 0
     assert gh.state == ALL_OFF
     assert gh.writes() == [
+        ("DELETE", "immutable-releases", None),
         ("PATCH", "", {"security_and_analysis": {"secret_scanning_push_protection": {"status": "disabled"}}}),
         ("PATCH", "", {"security_and_analysis": {"secret_scanning": {"status": "disabled"}}}),
         ("PATCH", "code-scanning/default-setup", {"state": "not-configured"}),
@@ -271,7 +276,7 @@ def test_ensure_fails_if_github_doesnt_apply_a_change(
     assert _run(tmp_path, monkeypatch, gh, ["ensure"]) == 1
     err = capsys.readouterr().err
     assert "GitHub didn't apply the change: push-protection is false on GitHub, not true\n" in err
-    assert "organization's security configuration" in err
+    assert "the organization's settings may control it" in err
 
 
 def test_ensure_reports_a_refused_change(
@@ -288,7 +293,7 @@ def test_ensure_reports_a_refused_change(
 def test_dump_round_trips_through_check(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    state = ALL_OFF | {"dependabot-alerts": True, "codeql-default-setup": True}
+    state = ALL_OFF | {"dependabot-alerts": True, "codeql-default-setup": True, "immutable-releases": True}
     assert _run(tmp_path, monkeypatch, FakeGitHub(state), ["dump"], "") == 0
     dumped = capsys.readouterr()
     assert dumped.err == ""
@@ -306,10 +311,12 @@ def test_dump_round_trips_through_check(
         "secret-protection = false\n"
         "# Push protection\n"
         "push-protection = false\n"
+        "# Release immutability (General settings page)\n"
+        "immutable-releases = true\n"
     )
     gh = FakeGitHub(state)
     assert _run(tmp_path, monkeypatch, gh, ["check"], dumped.out) == 0
-    assert "All 6 setting(s) in o/r match" in capsys.readouterr().out
+    assert "All 7 setting(s) in o/r match" in capsys.readouterr().out
 
 
 def test_dump_leaves_out_a_setting_github_refuses(
@@ -359,6 +366,7 @@ def test_load_settings_rejects(tmp_path: Path, table: str, message: str) -> None
         ("", {"security_and_analysis": {"dependabot_security_updates": {"status": "paused"}}}, "'paused' as"),
         ("private-vulnerability-reporting", {"enabled": None}, "None for private vulnerability reporting"),
         ("code-scanning/default-setup", {"state": "odd"}, "'odd' as CodeQL default setup's state"),
+        ("immutable-releases", {}, "None for immutable releases"),
     ],
 )
 def test_unexpected_responses_fail(
@@ -410,3 +418,21 @@ def test_missing_security_updates_status_reads_as_off(
 
 def test_setting_keys_are_unique() -> None:
     assert len(BY_KEY) == len(SETTINGS)
+
+
+def test_immutable_releases_404_reads_as_off(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    pyproject = "[tool.repoutils.security-settings]\nimmutable-releases = true\n"
+    gh = FakeGitHub(ALL_OFF, refused={"GET immutable-releases": 404})
+    assert _run(tmp_path, monkeypatch, gh, ["check"], pyproject) == 1
+    assert capsys.readouterr().out.startswith("immutable-releases is false on GitHub, not true\n")
+
+
+def test_immutable_releases_other_errors_fail(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    pyproject = "[tool.repoutils.security-settings]\nimmutable-releases = true\n"
+    gh = FakeGitHub(ALL_OFF, refused={"GET immutable-releases": 403})
+    assert _run(tmp_path, monkeypatch, gh, ["check", "--exit-zero"], pyproject) == 1
+    assert "HTTP 403 from" in capsys.readouterr().err

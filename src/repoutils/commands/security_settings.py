@@ -4,8 +4,9 @@ them so they do.
 ``[tool.repoutils.security-settings]`` covers the settings on the repository's
 Advanced Security settings page that GitHub's REST API can read and change:
 private vulnerability reporting, Dependabot alerts and security updates,
-CodeQL default setup, secret protection and push protection. Each is ``true``
-or ``false``. A setting the table leaves out is left as it is on GitHub.
+CodeQL default setup, secret protection and push protection. It also covers
+release immutability, from the General settings page. Each is ``true`` or
+``false``. A setting the table leaves out is left as it is on GitHub.
 
 ``ensure`` changes every setting that differs, then reads them all back and
 fails if GitHub didn't apply one (as when an organization's policy controls
@@ -101,6 +102,23 @@ def _read_private_reporting(repo: str, token: str) -> bool:
     return enabled
 
 
+def _read_immutable_releases(repo: str, token: str) -> bool:
+    url = f"{repo_url(repo)}/immutable-releases"
+    try:
+        enabled = github.request("GET", url, token).get("enabled")
+    except urllib.error.HTTPError as e:
+        # GitHub's documentation says it answers 404 while they're off.
+        # read() has already shown the token can administer the repository,
+        # so a 404 can't mean the token can't see the setting.
+        if e.code != 404:
+            raise
+        e.close()
+        return False
+    if not isinstance(enabled, bool):
+        raise RuntimeError(f"GitHub returned {enabled!r} for immutable releases, not true or false")
+    return enabled
+
+
 def _read_codeql(repo: str, token: str) -> bool:
     state = github.request("GET", f"{repo_url(repo)}/code-scanning/default-setup", token).get("state")
     if state not in ("configured", "not-configured"):
@@ -163,6 +181,13 @@ SETTINGS = [
         _status("secret_scanning_push_protection"),
         None,
         _status_writer("secret_scanning_push_protection"),
+    ),
+    Setting(
+        "immutable-releases",
+        "Release immutability (General settings page)",
+        None,
+        _read_immutable_releases,
+        _toggle_writer("immutable-releases"),
     ),
 ]
 BY_KEY = {setting.key: setting for setting in SETTINGS}
@@ -305,7 +330,7 @@ def ensure(repo: str, token: str, settings: dict[Setting, bool]) -> int:
             for change in unapplied:
                 print(f"GitHub didn't apply the change: {change}", file=sys.stderr)
             print(
-                "The repository's plan may not offer it, or an organization's security configuration may control it.",
+                "The repository's plan may not offer it, or the organization's settings may control it.",
                 file=sys.stderr,
             )
             return 1
