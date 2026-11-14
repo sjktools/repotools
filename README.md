@@ -46,7 +46,7 @@ That installs only repoutils, hash-checked against `uv.lock`, and not the projec
 | `added-strings` | Lists the lines a PR adds that have strings `pyproject.toml` configures, such as `# noqa:`, or posts that to a PR, for information only. |
 | `post-patch-coverage` | Posts diff-cover's Markdown patch coverage report to a PR, reformatted, with the project's coverage and its change from the PR's base, and warns when either falls short. |
 | `post-coverage-status` | Posts a commit's project and patch coverage as commit statuses, as a record and not a gate. |
-| `wait-for-base-coverage` | Waits for a PR's base commit to have its `coverage/project` status, so the PR's comparison works. Version 0.1.0 waited for Codecov instead. |
+| `wait-for-base-coverage` | Waits for a PR's base commit to have its `coverage/project` status, so the PR's comparison works. |
 | `post-screenshots` | Uploads a directory of PNGs and posts them to a PR as a comment. |
 | `recreate-pr` | Recreates a PR as a draft from the same branch and closes the original. |
 | `labels` | Checks or creates the labels `pyproject.toml` defines, or prints the ones the repository has. |
@@ -162,7 +162,7 @@ required-status-checks = { required-status-checks = [{ context = "test", app = "
 
 # The names of the secrets `repoutils secrets` checks the repository has; see below.
 [tool.repoutils.secrets]
-actions = ["CODECOV_TOKEN"]
+actions = []
 dependabot = ["DEPENDABOT_FIX_TOKEN"]
 environments.release = ["RELEASE_TOKEN"]
 other = ["ORG_DEPLOY_KEY"]

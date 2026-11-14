@@ -57,7 +57,7 @@ A command that posts a PR comment finds its earlier comment by a hidden marker, 
 CI (`.github/workflows/ci.yml`) delegates each step to the `justfile`.
 Run `just ci` to run everything CI's test, build and coverage jobs run, or `just --list` for the recipes.
 `just check` runs every check except `lock-check` (which `just ci` runs first) without fixing anything, and `just fix` reformats and applies lint autofixes.
-`just test` runs the tests, and `just coverage` runs them with a coverage report and writes `coverage.xml` and `junit.xml`.
+`just test` runs the tests, and `just coverage` runs them with a coverage report and writes `coverage.xml`.
 Before opening a PR, run `just patch-coverage` too, which reports the changed lines the tests miss, and cover them where a test is worth it.
 
 The justfile runs repoutils' own checks (`whitespace-check`, `check-pins` and so on) from this checkout, so CI dogfoods them.
@@ -84,7 +84,7 @@ CI's `actions-lock` job verifies it.
 
 - The tests, on Linux and macOS for each supported Python version.
 - Once the tests pass, `just check`, the build and a smoke test of the wheel.
-- Coverage, uploaded to Codecov with the `CODECOV_TOKEN` secret, which doesn't wait for the tests.
+- Coverage, which doesn't wait for the tests.
 - The coverage report (patch, project and the change from the PR's base) and the long files report, posted as PR comments on PRs from this repository that aren't Dependabot's.
 - The project and patch coverage, posted as `coverage/project` and `coverage/patch` commit statuses on `main`'s commits and on PRs that get the comments.
 
