@@ -1,6 +1,7 @@
 import io
 import subprocess
 import time
+import tomllib
 import urllib.error
 from collections.abc import Callable
 from email.message import Message
@@ -296,6 +297,7 @@ def test_dump_round_trips_through_check(
     state = ALL_OFF | {"dependabot-alerts": True, "codeql-default-setup": True, "immutable-releases": True}
     assert _run(tmp_path, monkeypatch, FakeGitHub(state), ["dump"], "") == 0
     dumped = capsys.readouterr()
+    tomllib.loads(dumped.out)
     assert dumped.err == ""
     assert dumped.out == (
         "[tool.repoutils.security-settings]\n"
@@ -325,6 +327,7 @@ def test_dump_leaves_out_a_setting_github_refuses(
     gh = FakeGitHub(ALL_OFF, refused={"code-scanning/default-setup": 403})
     assert _run(tmp_path, monkeypatch, gh, ["dump"], "") == 0
     out, err = capsys.readouterr()
+    tomllib.loads(out)
     assert "codeql-default-setup" not in out
     assert "push-protection = false\n" in out
     assert err == "Left out codeql-default-setup: GitHub refused to read it (HTTP 403)\n"

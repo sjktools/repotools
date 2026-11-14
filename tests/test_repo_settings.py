@@ -1,6 +1,7 @@
 import io
 import re
 import subprocess
+import tomllib
 import urllib.error
 from email.message import Message
 from pathlib import Path
@@ -316,6 +317,7 @@ def test_dump(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.Ca
     # dump doesn't need pyproject.toml to set anything.
     assert _run(tmp_path, monkeypatch, FakeGitHub(EVERYTHING), ["dump"], "") == 0
     out, err = capsys.readouterr()
+    tomllib.loads(out)
     assert err == ""
     assert out == (
         "[tool.repoutils.repo-settings]\n"
@@ -366,6 +368,7 @@ def test_dump_leaves_out_what_it_cant_give(
     assert _run(tmp_path, monkeypatch, FakeGitHub(existing), ["dump"], config) == 0
     assert (tmp_path / "pyproject.toml").read_text() == config
     out, err = capsys.readouterr()
+    tomllib.loads(out)
     assert "merge-commit" not in out and "pull-request-creation" not in out and "title" not in out
     assert "[tool.repoutils.repo-settings.squash-merge]\nallow = true\n\n" in out
     assert err == (
@@ -384,5 +387,6 @@ def test_dump_doesnt_depend_on_the_order_of_settings(monkeypatch: pytest.MonkeyP
     # A message listed before its title is still given with it.
     monkeypatch.setattr(repo_settings, "SETTINGS", list(reversed(repo_settings.SETTINGS)))
     text, skipped = repo_settings.dump_toml(EVERYTHING)
+    tomllib.loads(text)
     assert skipped == []
     assert 'message = "pr-body"\n' in text and 'message = "pr-title"\n' in text

@@ -49,6 +49,7 @@ That installs only repoutils, hash-checked against `uv.lock`, and not the projec
 | `wait-for-base-coverage` | Waits for a PR's base commit to have its `coverage/project` status, so the PR's comparison works. |
 | `post-screenshots` | Uploads a directory of PNGs and posts them to a PR as a comment. |
 | `recreate-pr` | Recreates a PR as a draft from the same branch and closes the original. |
+| `github-settings` | Runs `check`, `ensure` or `dump` across all the GitHub settings commands below. `check` and `ensure` skip the ones `pyproject.toml` doesn't configure, and `dump` runs them all. |
 | `labels` | Checks or creates the labels `pyproject.toml` defines, or prints the ones the repository has. |
 | `repo-settings` | Checks or changes the repository settings `pyproject.toml` gives, or prints the ones the repository has. |
 | `rulesets` | Checks, creates or updates the branch and tag rulesets `pyproject.toml` defines, or prints the ones the repository has. |
@@ -307,6 +308,20 @@ While it's missing, it watches the base's `post-coverage-status` check run (`--c
 After 10 minutes (`--timeout`) it stops anyway.
 Giving up only warns and exits 0, so a broken base doesn't fail the PR's own checks.
 It needs `checks: read` and `statuses: read`.
+
+### GitHub settings
+
+`repoutils github-settings check` runs the `check` of each GitHub settings command that `pyproject.toml` configures, in the order of the table above.
+It says which commands it skips, and fails if it skips them all.
+It runs every command it doesn't skip, and fails if any of them fails.
+It passes `--repo` and `--exit-zero` on to each command, and `--fail-on-unexpected` to the commands that have it.
+
+`repoutils github-settings ensure` runs `ensure` in the same way, leaving out `secrets`, which has no `ensure`.
+It stops at the first command that fails.
+So a deploy key's secret isn't set in an environment whose protection didn't apply.
+
+`repoutils github-settings dump` runs every command's `dump`, whatever `pyproject.toml` configures, with a blank line between them.
+The output can be pasted into `pyproject.toml` as it is.
 
 ### Labels
 

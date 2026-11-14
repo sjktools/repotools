@@ -2,6 +2,7 @@ import copy
 import io
 import json
 import subprocess
+import tomllib
 import urllib.error
 from email.message import Message
 from pathlib import Path
@@ -281,6 +282,7 @@ def test_dump(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.Ca
     gh = FakeGitHub(MATCHING, TAG_RULESET, PUSH_RULESET)
     assert _run(tmp_path, monkeypatch, gh, ["dump"], "") == 0
     out, err = capsys.readouterr()
+    tomllib.loads(out)
     assert err == ""
     assert out.startswith('[tool.repoutils.rulesets.main]\ninclude = ["~DEFAULT_BRANCH"]\n')
     assert '[tool.repoutils.rulesets.release-tags-immutable]\ntarget = "tag"\ninclude = ["v*"]\n' in out
@@ -296,7 +298,9 @@ def test_dump_reads_every_page_of_check_runs(
     gh.check_apps = [{"id": i, "slug": f"app{i}"} for i in range(100)] + gh.check_apps
     gh.apps.pop("github-actions")
     assert _run(tmp_path, monkeypatch, gh, ["dump"], "") == 0
-    assert '{ context = "build", app = "github-actions" }' in capsys.readouterr().out
+    out = capsys.readouterr().out
+    tomllib.loads(out)
+    assert '{ context = "build", app = "github-actions" }' in out
 
 
 def test_dump_finds_a_known_app_or_warns(
@@ -307,6 +311,7 @@ def test_dump_finds_a_known_app_or_warns(
     gh.apps.pop("github-actions")
     assert _run(tmp_path, monkeypatch, gh, ["dump"], "") == 0
     out, err = capsys.readouterr()
+    tomllib.loads(out)
     assert '{ app = "dependabot" }' in out
     assert '{ context = "build", integration-id = 15368 }' in out
     assert err == (
@@ -328,6 +333,7 @@ def test_dump_from_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys:
     argv = ["dump", "--from-file", str(tmp_path / "one.json"), "--from-file", str(tmp_path / "two.json")]
     assert _run(tmp_path, monkeypatch, FakeGitHub(), argv, "") == 0
     out, err = capsys.readouterr()
+    tomllib.loads(out)
     assert out.startswith('[tool.repoutils.rulesets.exported]\ninclude = ["dev"]\n')
     assert '{ context = "build", app = "github-actions" }' in out
     assert '[tool.repoutils.rulesets.release-tags-immutable]\ntarget = "tag"\ninclude = ["v*"]\n' in out

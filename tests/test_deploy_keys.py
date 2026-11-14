@@ -2,6 +2,7 @@ import io
 import re
 import shutil
 import subprocess
+import tomllib
 import urllib.error
 import urllib.parse
 from email.message import Message
@@ -437,6 +438,7 @@ def test_dump_round_trips(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsy
     assert _run(tmp_path, monkeypatch, gh, ["dump"], config) == 0
     assert (tmp_path / "pyproject.toml").read_text() == config
     out, err = capsys.readouterr()
+    tomllib.loads(out)
     assert err == "2 deploy keys are titled 'a b', so it's printed once.\n"
     assert (
         out
@@ -445,6 +447,7 @@ def test_dump_round_trips(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsy
     gh.keys.pop()
     assert _run(tmp_path, monkeypatch, gh, ["dump"], config) == 0
     out = capsys.readouterr().out
+    tomllib.loads(out)
     assert _run(tmp_path, monkeypatch, gh, ["check", "--fail-on-unexpected"], out) == 0
     assert gh.writes() == []
 
