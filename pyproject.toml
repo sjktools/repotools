@@ -105,8 +105,11 @@ push-protection = true
 
 # The secrets `repoutils secrets` checks the repository has (see AGENTS.md).
 [tool.repoutils.secrets]
-actions = ["AUTOFIX_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "GH_ACTIONS_TOKEN"]
+actions = ["AUTOFIX_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"]
 dependabot = ["DEPENDABOT_FIX_TOKEN"]
+# Only main's workflows can reach these: ci.yml's release job pushes v* tags
+# with the deploy key, and bump-version.yml uses GH_ACTIONS_TOKEN.
+environments.release = ["GH_ACTIONS_TOKEN", "RELEASE_DEPLOY_KEY"]
 
 # The deployment environments `repoutils environments` checks or creates.
 # Only main can deploy to release, which holds the secrets that can tag a
@@ -115,10 +118,12 @@ dependabot = ["DEPENDABOT_FIX_TOKEN"]
 [tool.repoutils.environments.release]
 deployment-branches = "selected"
 allowed-branches = ["main"]
+allowed-tags = []
 
-# publish-pypi.yml's environments. Only a v* tag (a release) may deploy to pypi, so a run of
-# a PR branch's copy of the workflow (which /testpypi dispatches) can't publish
-# to PyPI through trusted publishing; testpypi stays open for /testpypi.
+# publish-pypi.yml's environments. Only a v* tag (a release) may deploy to
+# pypi, so a run of a PR branch's copy of the workflow (which /testpypi
+# dispatches) can't publish to PyPI through trusted publishing; testpypi stays
+# open for /testpypi.
 [tool.repoutils.environments.pypi]
 deployment-branches = "selected"
 allowed-branches = []
@@ -178,7 +183,7 @@ required-status-checks = [
 
 # Release tags (see #24). Nobody can move or delete a v* tag, admins included:
 # a faulty release is fixed by a new one. Only deploy keys can create one,
-# which is how the release job will tag a release (#39). They're two rulesets because a
+# which is how ci.yml's release job tags a release. They're two rulesets because a
 # bypass covers every rule in its ruleset.
 [tool.repoutils.rulesets.release-tags-immutable]
 target = "tag"
