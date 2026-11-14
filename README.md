@@ -45,6 +45,7 @@ That installs only repoutils, hash-checked against `uv.lock`, and not the projec
 | `post-comment` | Posts a Markdown file to a PR, editing the earlier comment or hiding it with `--hide-previous`. |
 | `added-strings` | Lists the lines a PR adds that have strings `pyproject.toml` configures, such as `# noqa:`, or posts that to a PR, for information only. |
 | `post-patch-coverage` | Posts diff-cover's Markdown patch coverage report to a PR, reformatted. |
+| `post-coverage-status` | Posts a project's coverage from `coverage.xml` as a commit status, as a record of it and not a gate. |
 | `wait-for-base-coverage` | Waits for Codecov to have a PR base commit's coverage, so the PR's comparison works. |
 | `post-screenshots` | Uploads a directory of PNGs and posts them to a PR as a comment. |
 | `recreate-pr` | Recreates a PR as a draft from the same branch and closes the original. |
@@ -71,6 +72,10 @@ Settings go in the project's `pyproject.toml`, and all of them are optional:
 comment-prefix = "repoutils"
 # The branch to compare with when there's no PR base.
 default-branch = "main"
+
+# The name of the commit status `repoutils post-coverage-status` posts; see below.
+[tool.repoutils.coverage]
+status-name = "coverage/project"
 
 [tool.repoutils.sentence-per-line]
 files = ["AGENTS.md", "README.md"]
@@ -235,6 +240,29 @@ The report is for information only, so the command exits 0 whatever it finds.
 It still fails if it can't check, such as on a bad setting, a failed `git` command or a failed request to GitHub.
 With `--post <PR>`, it posts the report only when the PR adds a string.
 If a later push removes them all, it updates the earlier comment to say so, rather than leaving a stale warning.
+
+### Coverage status
+
+`repoutils post-coverage-status <sha>` reads the project's coverage from `coverage.xml` and posts it on the commit as a status named `coverage/project`.
+Run it on each push to the default branch, and that branch's statuses become a history of its coverage.
+A PR's checks can then read its base commit's status to compare against.
+
+The status is always `success`, because it records coverage and doesn't judge it.
+Its description is the figure in one fixed format, so other tools can parse it:
+
+```text
+96.52% (2114/2172 lines, 610/650 branches)
+```
+
+The percentage is coverage.py's total, which counts covered lines and branches together.
+It's cut to two decimal places rather than rounded, so it shows 100.00% only when nothing is missed.
+The branches part appears only when the report measured branches.
+
+A token that can post statuses can post one under any name, including a required check's.
+So post from a job of its own that installs nothing, and hand it `coverage.xml` as an artifact.
+That job needs `statuses: write`.
+Post from the default branch's own run, since a squash merge gives the commit a new SHA.
+`--dry-run` prints the status without posting it.
 
 ### Labels
 

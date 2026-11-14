@@ -46,6 +46,11 @@ diff-cover base='origin/main' *args:
 patch-coverage-post *args:
     {{ repoutils }} post-patch-coverage "$@"
 
+# Post the coverage in coverage.xml as a commit status on a commit (argument: its SHA)
+[positional-arguments]
+coverage-status-post *args:
+    {{ repoutils }} post-coverage-status "$@"
+
 # Wait (up to 10 minutes) for Codecov to have a PR base commit's coverage: arguments are owner/repo and the base SHA
 [positional-arguments]
 wait-for-base-coverage *args:

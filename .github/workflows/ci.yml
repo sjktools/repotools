@@ -95,6 +95,8 @@ jobs:
     outputs:
       # So post-patch-coverage posts the report even if a later step fails.
       patch-report: ${{ steps.patch-report.outcome }}
+      # And so post-coverage-status posts the coverage.
+      coverage-report: ${{ steps.coverage-report.outcome }}
 
     steps:
       # Full history so diff-cover can find the merge base with the PR's base branch.
@@ -120,6 +122,17 @@ jobs:
 
       - name: Report coverage
         run: just coverage --cov-report="markdown-append:${GITHUB_STEP_SUMMARY}"
+
+      # For post-coverage-status to post on main's commit. Only once the tests
+      # pass, as a failed run's coverage isn't the commit's.
+      - name: Upload coverage report
+        id: coverage-report
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          retention-days: 14
 
       # Codecov Test Analytics, from the junit.xml `just coverage` writes. Runs
       # even if the tests failed, as that's when the results matter most.
@@ -220,6 +233,49 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         # GITHUB_TOKEN can't look up its own login, so name it.
         run: just patch-coverage-post "$PR_NUMBER" --commit "$HEAD_SHA" --run-url "$RUN_URL" --author 'github-actions[bot]'
+
+  # Posts the coverage job's coverage.xml as a coverage/project commit status on
+  # each push to main, always success, so main's commits keep a history of
+  # coverage and a PR can read its base's figure. On main only, as a squash
+  # merge gives the commit a new SHA, so the PR's run can't post it. A token
+  # with statuses: write can post a status named like any required check, so,
+  # like post-patch-coverage, this job installs nothing and runs repoutils from
+  # source with `uv run --no-project`.
+  post-coverage-status:
+    needs: coverage
+    if: ${{ !cancelled() && needs.coverage.outputs.coverage-report == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: write
+
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      # Keep version in step with pyproject.toml's [tool.uv] required-version.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          version: "0.13.6"
+
+      # Keep just-version in step with the justfile's minimum-version.
+      - name: Install just
+        uses: extractions/setup-just@v4.0.0
+        with:
+          just-version: "1.58.0"
+
+      - name: Download coverage report
+        uses: actions/download-artifact@v8.0.2
+        with:
+          name: coverage-xml
+
+      - name: Post coverage as a commit status
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: just coverage-status-post "$GITHUB_SHA" --run-url "$RUN_URL"
 
   # Lists the files over pyproject.toml's line limit, for information only, in
   # the job summary and, on PRs, as a github-actions[bot] comment edited in

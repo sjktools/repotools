@@ -53,6 +53,7 @@ GROUPS: dict[str, list[Command]] = {
         Command("post-comment", "post_comment", "Post a Markdown file to a PR, editing or hiding the last one"),
         Command("added-strings", "added_strings", "List configured strings a PR adds, or post that to a PR"),
         Command("post-patch-coverage", "post_patch_coverage", "Post a diff-cover patch coverage report to a PR"),
+        Command("post-coverage-status", "post_coverage_status", "Post a project's coverage as a commit status"),
         Command("wait-for-base-coverage", "wait_for_base_coverage", "Wait for Codecov to have a PR base's coverage"),
         Command("post-screenshots", "post_screenshots", "Post screenshots to a PR as a comment"),
         Command("recreate-pr", "recreate_pr", "Recreate a PR as a draft and close the original"),
