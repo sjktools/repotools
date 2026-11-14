@@ -314,6 +314,8 @@ def replace(repo: str, token: str, key: DeployKey, old: Iterable[dict[str, Any]]
             try:
                 _delete(repo, token, added)
             except Exception as cleanup:
+                if isinstance(cleanup, urllib.error.HTTPError):
+                    cleanup.close()
                 print(f"{key.title}: couldn't delete the key just added (id {added['id']}): {cleanup}", file=sys.stderr)
             if not isinstance(error, subprocess.CalledProcessError):
                 # gh may have set the secret before the interruption, to the private half of the key just deleted.
