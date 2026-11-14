@@ -134,6 +134,11 @@ def _normal(value: Any) -> Any:
     return value
 
 
+def managed(target: Any) -> bool:
+    """Whether target (as GitHub or an export gives it) is a kind of ruleset repoutils manages."""
+    return isinstance(target, str) and target in TARGETS
+
+
 def short_ref(pattern: str, target: str = "branch") -> str:
     return pattern.removeprefix(TARGETS[target])
 
@@ -298,7 +303,7 @@ def _load_ruleset(where: str, entry: dict[str, Any]) -> dict[str, Any]:
             raise config.ConfigError(f"{where} has an unknown rule {key} (rules are named like non-fast-forward)")
         if not isinstance(value, dict | bool):
             raise config.ConfigError(f"{where} rules.{key} must be true, false or a table")
-        if _snake(key) not in ALLOWED_RULES[target]:
+        if value is not False and _snake(key) not in ALLOWED_RULES[target]:
             other = "tag" if target == "branch" else "branch"
             raise config.ConfigError(
                 f"{where} rules.{key} applies only to {other} rulesets, and this is a {target} one"
@@ -386,7 +391,7 @@ def from_github(ruleset: dict[str, Any], names: Names) -> dict[str, Any]:
     target = result.get("target", "branch")
     ref_name = (ruleset.get("conditions") or {}).get("ref_name") or {}
     for key in ("include", "exclude"):
-        patterns = sorted({short_ref(p, target) if target in TARGETS else p for p in ref_name.get(key) or []})
+        patterns = sorted({short_ref(p, target) if managed(target) else p for p in ref_name.get(key) or []})
         if patterns:
             result[key] = patterns
     if "bypass_actors" not in ruleset:
@@ -529,7 +534,7 @@ def dump_toml(rulesets: Iterable[dict[str, Any]], names: Names) -> tuple[str, li
                 warnings.append(f"{name}: repoutils doesn't know the bypass actor type {entry['actor-type']}")
         warnings += [f"{name}: repoutils doesn't know the rule {key}" for key in rules if _snake(key) not in RULES]
         target = values.get("target", "branch")
-        if target not in TARGETS:
+        if not managed(target):
             warnings.append(f"{name}: repoutils doesn't manage {target} rulesets")
         else:
             other = [key for key in rules if _snake(key) in RULES and _snake(key) not in ALLOWED_RULES[target]]

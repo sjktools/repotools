@@ -323,14 +323,18 @@ def test_dump_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: p
 def test_dump_from_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     export = MATCHING | {"name": "exported", "conditions": {"ref_name": {"include": ["refs/heads/dev"]}}}
     (tmp_path / "one.json").write_text(json.dumps(export))
-    (tmp_path / "two.json").write_text(json.dumps([TAG_RULESET, PUSH_RULESET]))
+    malformed = PUSH_RULESET | {"name": "odd", "target": ["tag"]}
+    (tmp_path / "two.json").write_text(json.dumps([TAG_RULESET, PUSH_RULESET, malformed]))
     argv = ["dump", "--from-file", str(tmp_path / "one.json"), "--from-file", str(tmp_path / "two.json")]
     assert _run(tmp_path, monkeypatch, FakeGitHub(), argv, "") == 0
     out, err = capsys.readouterr()
     assert out.startswith('[tool.repoutils.rulesets.exported]\ninclude = ["dev"]\n')
     assert '{ context = "build", app = "github-actions" }' in out
     assert '[tool.repoutils.rulesets.release-tags-immutable]\ntarget = "tag"\ninclude = ["v*"]\n' in out
-    assert err == "Left out 'pushes': repoutils doesn't manage push rulesets\n"
+    assert err == (
+        "Left out 'pushes': repoutils doesn't manage push rulesets\n"
+        "Left out 'odd': repoutils doesn't manage ['tag'] rulesets\n"
+    )
 
 
 def test_no_rulesets_defined(

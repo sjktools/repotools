@@ -290,6 +290,12 @@ required-status-checks = [{ context = "test", app = "github-actions" }]
 """
 
 
+def test_a_rule_left_off_needs_no_target(tmp_path: Path) -> None:
+    # false is a rule's default, so a branch-only rule can be false in a tag ruleset.
+    text = "[tool.repoutils.rulesets.x]\ntarget = 'tag'\ninclude = ['v*']\nrules.pull-request = false\n"
+    assert _load(tmp_path, text) == {"x": {"target": "tag", "include": ["v*"]}}
+
+
 def test_tag_ruleset(tmp_path: Path) -> None:
     ruleset = _load(tmp_path, TAG_CONFIG)["tags"]
     assert ruleset["target"] == "tag"

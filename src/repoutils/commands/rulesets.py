@@ -44,12 +44,12 @@ from typing import Any
 from repoutils import github
 from repoutils.ruleset_format import (
     TABLE,
-    TARGETS,
     Names,
     diff,
     dump_toml,
     from_github,
     load_rulesets,
+    managed,
     short_ref,
     to_github,
 )
@@ -95,7 +95,7 @@ def repo_rulesets(repo: str, token: str) -> list[dict[str, Any]]:
         url = f"{github.API_URL}/repos/{repo}/rulesets?includes_parents=false&per_page={PER_PAGE}&page={page}"
         batch = github.request("GET", url, token)
         rulesets += [
-            r for r in batch if r.get("target") in TARGETS and r.get("source_type", "Repository") == "Repository"
+            r for r in batch if managed(r.get("target")) and r.get("source_type", "Repository") == "Repository"
         ]
         if len(batch) < PER_PAGE:
             return rulesets
@@ -178,9 +178,9 @@ def dump(repo: str, token: str, files: list[str]) -> int:
             if not all(isinstance(r, dict) for r in (loaded if isinstance(loaded, list) else [loaded])):
                 raise ValueError(f"{path} must hold a ruleset JSON object, or a list of them")
             rulesets += loaded if isinstance(loaded, list) else [loaded]
-        for r in [r for r in rulesets if r.get("target", "branch") not in TARGETS]:
+        for r in [r for r in rulesets if not managed(r.get("target", "branch"))]:
             print(f"Left out {r.get('name')!r}: repoutils doesn't manage {r.get('target')} rulesets", file=sys.stderr)
-        rulesets = [r for r in rulesets if r.get("target", "branch") in TARGETS]
+        rulesets = [r for r in rulesets if managed(r.get("target", "branch"))]
     else:
         rulesets = [get_ruleset(repo, token, r["id"]) for r in repo_rulesets(repo, token)]
         if not rulesets:
