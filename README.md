@@ -55,10 +55,11 @@ That installs only repoutils, hash-checked against `uv.lock`, and not the projec
 | `environments` | Checks, creates or updates the deployment environments `pyproject.toml` defines, or prints the ones the repository has. |
 | `actions-settings` | Checks or changes the Actions settings `pyproject.toml` gives, or prints the ones the repository has. |
 | `secrets` | Checks the repository has the Actions, Dependabot and environment secrets `pyproject.toml` names, or prints the names it has. Also checks the workflows use exactly those secrets. |
+| `deploy-keys` | Checks or creates the deploy keys `pyproject.toml` declares, and the secrets that hold their private halves, or prints the keys the repository has. |
 | `security-settings` | Checks or changes the security settings `pyproject.toml` gives, such as secret protection, or prints the ones the repository has. |
 | `check-attestations` | Fails unless every distribution in `dist/` has a PEP 740 publish attestation. |
 
-The commands that post to a PR need a GitHub token, and so do `labels`, `repo-settings`, `actions-settings`, `rulesets`, `environments`, `secrets` and `security-settings`.
+The commands that post to a PR need a GitHub token, and so do `labels`, `repo-settings`, `actions-settings`, `rulesets`, `environments`, `secrets`, `deploy-keys` and `security-settings`.
 They read `$GITHUB_TOKEN`, and fall back to `gh auth token`.
 
 ## Configuration
@@ -178,6 +179,11 @@ push-protection = true
 allowed-tags = ["v*"]
 
 [tool.repoutils.environments.testpypi]
+
+# A deploy key `repoutils deploy-keys` checks or creates, and the secret that holds its private half; see below.
+[tool.repoutils.deploy-keys.release]
+write = true
+secret = { environment = "release", name = "RELEASE_DEPLOY_KEY" }
 ```
 
 ### Prose
@@ -599,6 +605,46 @@ A job gets an environment's secrets only if it names that environment as its `en
 So `check-workflows` also fails if a job uses a secret that only environments hold, without naming one of them.
 It can't tell a job's environment when an expression gives it, so it doesn't check that job.
 It skips `GITHUB_TOKEN`, which GitHub provides, and anything in a comment.
+
+### Deploy keys
+
+Each `[tool.repoutils.deploy-keys.<title>]` table is one of the repository's deploy keys, which the table's key names by its title.
+`write = true` gives the key write access, and leaving it out makes it read-only, as on GitHub.
+`secret` names the Actions secret that holds the key's private half, as `{ name = "NAME" }` for a repository secret.
+For an environment's secret, add `environment = "ENVIRONMENT"`.
+The public key isn't in `pyproject.toml`, so replacing a key needs no commit.
+An empty `[tool.repoutils.deploy-keys]` table declares that the repository has no keys with write access.
+
+`repoutils deploy-keys ensure` creates each missing key that has a `secret`.
+It generates an Ed25519 key pair with `ssh-keygen`, in a private temporary directory that it always deletes.
+It adds the public half to the repository, and then sets the secret to the private half with `gh secret set`, passing it on stdin.
+`gh` acts with the same token as the rest of the command, given as `GH_TOKEN`.
+If setting the secret fails, `ensure` deletes the key it just added.
+So `ssh-keygen` and `gh` are needed to create a key, but `check` and `dump` don't use them.
+
+GitHub can't change a key's access, so `ensure` replaces a key with the wrong access with a new pair, setting its secret as it does for a new key.
+For a key without a `secret`, it adds the same public key again instead.
+`ensure --rotate <title>` replaces a key and its secret with a new pair, adding the new key before it deletes the old one.
+`ensure` refuses to create a key without a `secret`, as nothing would hold its private half.
+It also refuses when an environment that holds a secret is missing, which `repoutils environments ensure` can create.
+It never deletes a key that `pyproject.toml` doesn't declare.
+
+`repoutils deploy-keys check` changes nothing.
+It fails if a declared key is missing, has the wrong access, or shares its title with another key.
+It also fails if the key's secret is missing, or was last set before the key was added, since then it can't hold the key's private half.
+`ensure` can't fix a missing or stale secret without the private half, so it tells you to use `--rotate`.
+`check` also fails on every key with write access that `pyproject.toml` doesn't declare, because a ruleset's deploy key bypass covers them all.
+With `--fail-on-unexpected` it fails on undeclared read-only keys too.
+`--exit-zero` works as it does for `labels check`.
+
+`ensure` needs a token that can administer the repository, such as a fine-grained token with the Administration write permission and the Secrets write permission.
+An environment's secret needs the Environments write permission instead of Secrets.
+`check` needs read access to the same things.
+
+`repoutils deploy-keys dump` prints every deploy key the repository has as these tables, with its access.
+It can't tell which secret holds a key's private half, so add each `secret` yourself.
+If two keys share a title, it prints that title once and warns.
+`dump` neither reads nor changes `pyproject.toml`.
 
 ### Security settings
 

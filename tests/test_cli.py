@@ -117,6 +117,7 @@ def test_check_screenshots_dir(monkeypatch: pytest.MonkeyPatch, capsys: pytest.C
         (["repo-settings"], "{check,ensure,dump}"),
         (["secrets"], "{check,dump,check-workflows}"),
         (["environments"], "{check,ensure,dump}"),
+        (["deploy-keys"], "{check,ensure,dump}"),
         (["rulesets"], "{check,ensure,dump}"),
         (["actions-settings"], "{check,ensure,dump}"),
         (["security-settings"], "{check,ensure,dump}"),
@@ -343,6 +344,13 @@ def test_this_repos_environments_load() -> None:
     by_name = {environment.name: environment.settings for environment in load_environments(ROOT)}
     assert by_name["pypi"]["allowed-tags"] == ["v*"]
     assert by_name["testpypi"]["deployment-branches"] == "all"
+
+
+def test_deploy_keys(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    # A project that declares no deploy keys fails before anything talks to GitHub.
+    monkeypatch.chdir(tmp_path)
+    assert cli.main(["deploy-keys", "check"]) == 1
+    assert "No deploy keys are declared" in capsys.readouterr().err
 
 
 def test_rulesets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
