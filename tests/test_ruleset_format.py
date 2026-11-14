@@ -206,7 +206,19 @@ def test_diff_names_only_the_list_items_that_differ() -> None:
     ("table", "message"),
     [
         ('main = "x"', "rulesets.main] must be a table"),
-        ("main.target = 'tag'", "can't set target: repoutils manages branch rulesets only"),
+        ("main.target = 'push'", 'target must be one of "branch", "tag" (repoutils doesn\'t manage push rulesets)'),
+        ("main.target = 'tag'\nmain.include = []", 'needs include, the tags it targets (e.g. ["v*"])'),
+        ("main.target = 'tag'\nmain.include = ['~DEFAULT_BRANCH']", "names ~DEFAULT_BRANCH, which isn't a tag"),
+        ("main.target = 'tag'\nmain.include = ['refs/heads/main']", "names refs/heads/main, which isn't a tag"),
+        ("main.include = ['refs/tags/v*']", "names refs/tags/v*, which isn't a branch"),
+        (
+            "main.target = 'tag'\nmain.include = ['v*']\nmain.rules.pull-request = true",
+            "rules.pull-request applies only to branch rulesets, and this is a tag one",
+        ),
+        (
+            "main.include = ['main']\nmain.rules.tag-name-pattern = { operator = 'regex', pattern = 'x' }",
+            "rules.tag-name-pattern applies only to tag rulesets, and this is a branch one",
+        ),
         ("main.colour = 1", "unknown setting(s): colour"),
         ("main.enforcement = 'on'", 'enforcement must be one of "active", "evaluate", "disabled"'),
         ("main.include = 'main'", "include must be a list of strings"),
@@ -255,3 +267,51 @@ def test_every_label_names_a_known_rule_or_parameter() -> None:
     for key in LABELS:
         rule, _, param = key.partition(".")
         assert rule in RULES and (not param or param in RULES[rule]), key
+
+
+TAG_CONFIG = """
+[tool.repoutils.rulesets.tags]
+target = "tag"
+include = ["refs/tags/v*", "~ALL"]
+exclude = ["v0.*"]
+bypass = [{ deploy-keys = true }]
+
+[tool.repoutils.rulesets.tags.rules]
+creation = true
+required-signatures = true
+
+[tool.repoutils.rulesets.tags.rules.tag-name-pattern]
+operator = "regex"
+pattern = "^v[0-9]"
+"""
+
+
+def test_tag_ruleset(tmp_path: Path) -> None:
+    ruleset = _load(tmp_path, TAG_CONFIG)["tags"]
+    assert ruleset["target"] == "tag"
+    assert ruleset["include"] == ["v*", "~ALL"]
+    body = to_github("tags", ruleset, NAMES)
+    assert body["target"] == "tag"
+    assert body["conditions"] == {"ref_name": {"include": ["refs/tags/v*", "~ALL"], "exclude": ["refs/tags/v0.*"]}}
+    assert body["rules"][2] == {
+        "type": "tag_name_pattern",
+        "parameters": {"operator": "regex", "pattern": "^v[0-9]", "negate": False},
+    }
+    assert from_github(body, NAMES) == ruleset
+    text, warnings = dump_toml([body], NAMES)
+    assert warnings == []
+    assert text.startswith('[tool.repoutils.rulesets.tags]\ntarget = "tag"\ninclude = ["v*", "~ALL"]\n')
+    assert "# Restrict tag names\n[tool.repoutils.rulesets.tags.rules.tag-name-pattern]\n" in text
+    assert _load(tmp_path, text) == {"tags": ruleset}
+
+
+def test_dump_warns_about_rules_a_target_cant_have() -> None:
+    rules = [{"type": "non_fast_forward"}, {"type": "pull_request"}]
+    ruleset: dict[str, Any] = {"name": "x", "target": "tag", "bypass_actors": [], "rules": rules}
+    _, warnings = dump_toml([ruleset], Names())
+    assert warnings == [
+        "x: check refuses rule pull-request in a tag ruleset",
+        "x: it targets no tag, so check refuses it without an include",
+    ]
+    _, warnings = dump_toml([ruleset | {"target": "push"}], Names())
+    assert warnings[0] == "x: repoutils doesn't manage push rulesets"

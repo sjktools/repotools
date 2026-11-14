@@ -50,7 +50,7 @@ That installs only repoutils, hash-checked against `uv.lock`, and not the projec
 | `recreate-pr` | Recreates a PR as a draft from the same branch and closes the original. |
 | `labels` | Checks or creates the labels `pyproject.toml` defines, or prints the ones the repository has. |
 | `repo-settings` | Checks or changes the repository settings `pyproject.toml` gives, or prints the ones the repository has. |
-| `rulesets` | Checks, creates or updates the branch rulesets `pyproject.toml` defines, or prints the ones the repository has. |
+| `rulesets` | Checks, creates or updates the branch and tag rulesets `pyproject.toml` defines, or prints the ones the repository has. |
 | `environments` | Checks, creates or updates the deployment environments `pyproject.toml` defines, or prints the ones the repository has. |
 | `actions-settings` | Checks or changes the Actions settings `pyproject.toml` gives, or prints the ones the repository has. |
 | `secrets` | Checks the repository has the Actions and Dependabot secrets `pyproject.toml` names, or prints the names it has. Also checks the workflows use exactly those secrets. |
@@ -140,7 +140,7 @@ require-sha-pinning = true
 default-token-permissions = "read"
 oidc.immutable-subject = true
 
-# A branch ruleset `repoutils rulesets` checks or creates, giving only what isn't a default; see below.
+# A ruleset `repoutils rulesets` checks or creates, giving only what isn't a default; see below.
 [tool.repoutils.rulesets.main]
 include = ["~DEFAULT_BRANCH"]
 bypass = [{ role = "admin", mode = "pull-request" }]
@@ -358,18 +358,19 @@ If GitHub doesn't return a setting, or returns a value the table can't express, 
 
 ### Rulesets
 
-Each `[tool.repoutils.rulesets.<name>]` table is one of the repository's branch rulesets (Settings, Rules, Rulesets).
+Each `[tool.repoutils.rulesets.<name>]` table is one of the repository's branch or tag rulesets (Settings, Rules, Rulesets).
 It gives only what isn't a new ruleset's default.
 Anything it leaves out is off or empty, so the table is the whole ruleset.
 `ensure` turns off any rule the table leaves out.
 
-Tag rulesets and push rulesets are left alone.
+Push rulesets are left alone.
 So are rulesets the repository inherits from its organization, and legacy branch protection rules.
 
 | Setting | Values | On GitHub |
 |---|---|---|
+| `target` | `"branch"` (the default) or `"tag"` | Whether it's a branch or a tag ruleset. |
 | `enforcement` | `"active"` (the default), `"evaluate"` or `"disabled"` | Whether the ruleset is enforced. |
-| `include`, `exclude` | branch name patterns, such as `["main", "release/*"]`, or `"~DEFAULT_BRANCH"` or `"~ALL"` | The branches it targets. `refs/heads/` is optional. `include` is required. |
+| `include`, `exclude` | branch or tag name patterns, such as `["main", "release/*"]` or `["v*"]`, or `"~ALL"` (or `"~DEFAULT_BRANCH"`, for a branch ruleset) | The branches or tags it targets. `refs/heads/` or `refs/tags/` is optional. `include` is required. |
 | `bypass` | a list of tables (see below) | Who can bypass the ruleset. |
 | `rules.<rule>` | `true`, or a table of the rule's parameters | Each rule that's on. |
 
@@ -377,8 +378,32 @@ Each `bypass` entry names one actor.
 That's `role` (`"admin"`, `"maintain"`, `"write"` or a custom role's ID), `app` (a GitHub App's slug), `team` (a team's slug), `org-admin = true` or `deploy-keys = true`.
 It can also give a `mode`: `"always"` (the default), `"pull-request"` or `"exempt"`.
 
+For example, these two tag rulesets stop anyone updating or deleting a `v*` tag, and let only deploy keys create one.
+They're separate because a bypass applies to every rule in its ruleset.
+
+```toml
+[tool.repoutils.rulesets.release-tags-immutable]
+target = "tag"
+include = ["v*"]
+
+[tool.repoutils.rulesets.release-tags-immutable.rules]
+update = true
+deletion = true
+
+[tool.repoutils.rulesets.release-tags-create]
+target = "tag"
+include = ["v*"]
+bypass = [{ deploy-keys = true }]
+
+[tool.repoutils.rulesets.release-tags-create.rules]
+creation = true
+```
+
 Rules and their parameters have the names that GitHub's REST API and a ruleset's JSON export use, in kebab case.
 So `non_fast_forward` is `rules.non-fast-forward`.
+A tag ruleset can have only the rules GitHub's ruleset page offers for tags.
+Those are `creation`, `update`, `deletion`, `required-linear-history`, `required-deployments`, `required-signatures`, `non-fast-forward`, `tag-name-pattern` and the three commit metadata patterns.
+`tag-name-pattern` is for tag rulesets only, and `check` refuses a rule in the wrong kind of ruleset.
 A parameter left out has the default that GitHub's ruleset page gives a new rule, which is off, 0 or empty.
 The exceptions are `pull-request.allowed-merge-methods`, which allows all three methods, and `merge-queue`, which takes the page's values.
 
@@ -410,14 +435,14 @@ It never deletes a ruleset.
 
 `repoutils rulesets check` changes nothing, and fails in exactly the cases where `ensure` would change something.
 `--exit-zero` and `--fail-on-unexpected` work as they do for `labels check`.
-Here `--fail-on-unexpected` fails on branch rulesets that `pyproject.toml` doesn't define.
+Here `--fail-on-unexpected` fails on branch and tag rulesets that `pyproject.toml` doesn't define.
 
 All three need a token that can administer the repository, because GitHub shows a ruleset's bypass list only to such a token.
 For a fine-grained token, that's Administration write for `ensure`, and read for `check` and `dump`.
 GitHub Actions' `GITHUB_TOKEN` can't be given it.
 If a bypass list names a team, the token also needs the organization's Members read permission, to look the team up.
 
-`repoutils rulesets dump` prints every branch ruleset the repository has as these tables.
+`repoutils rulesets dump` prints every branch and tag ruleset the repository has as these tables.
 You can paste them into `pyproject.toml`.
 If you paste them in unchanged, `check --fail-on-unexpected` passes, unless `dump` warned about something `check` refuses.
 With `--from-file`, it prints the rulesets in JSON files exported from GitHub's ruleset page instead.

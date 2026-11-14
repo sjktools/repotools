@@ -1,4 +1,4 @@
-"""The pyproject.toml format of a branch ruleset (``[tool.repoutils.rulesets.<name>]``),
+"""The pyproject.toml format of a branch or tag ruleset (``[tool.repoutils.rulesets.<name>]``),
 which gives only what differs from a new ruleset's defaults, and its
 conversion to and from the JSON GitHub's API and ruleset exports use, for
 ``repoutils rulesets``. Stdlib-only, like every repoutils module."""
@@ -15,13 +15,17 @@ from repoutils.ruleset_labels import LABELS
 
 TABLE = "[tool.repoutils.rulesets]"
 ENFORCEMENTS = ("active", "evaluate", "disabled")
+# The kinds of ruleset repoutils manages, with the prefix of the full refs each one's patterns name.
+TARGETS = {"branch": "refs/heads/", "tag": "refs/tags/"}
 # Each bypass mode as pyproject.toml gives it, and as GitHub does.
 BYPASS_MODES = {"always": "always", "pull-request": "pull_request", "exempt": "exempt"}
 # The IDs of the base repository roles that can bypass a ruleset (a custom role is given by its ID).
 ROLES = {"maintain": 2, "write": 4, "admin": 5}
 ACTOR_KEYS = ("role", "app", "team", "org-admin", "deploy-keys")
 # The order of a ruleset's keys in pyproject.toml.
-KEYS = ("enforcement", "include", "exclude", "bypass", "rules")
+KEYS = ("target", "enforcement", "include", "exclude", "bypass", "rules")
+# The settings' defaults, which load_rulesets and from_github leave out.
+DEFAULTS: dict[str, Any] = {"target": "branch", "enforcement": "active"}
 _BARE_KEY_RE = re.compile(r"[A-Za-z0-9_-]+")
 
 
@@ -33,7 +37,7 @@ class Required:
 
 
 _PATTERN = {"operator": Required(str), "pattern": Required(str), "name": "", "negate": False}
-# Every rule a branch ruleset can have, by its API name, with each of its
+# Every rule a branch or tag ruleset can have, by its API name, with each of its
 # parameters' defaults: what GitHub's ruleset page gives a new rule.
 RULES: dict[str, dict[str, Any]] = {
     "creation": {},
@@ -70,6 +74,7 @@ RULES: dict[str, dict[str, Any]] = {
     "commit_author_email_pattern": _PATTERN,
     "committer_email_pattern": _PATTERN,
     "branch_name_pattern": _PATTERN,
+    "tag_name_pattern": _PATTERN,
     "file_path_restriction": {"restricted_file_paths": []},
     "max_file_path_length": {"max_file_path_length": Required(int)},
     "file_extension_restriction": {"restricted_file_extensions": []},
@@ -78,6 +83,23 @@ RULES: dict[str, dict[str, Any]] = {
     "code_scanning": {"code_scanning_tools": []},
     "copilot_code_review": {"review_draft_pull_requests": False, "review_on_push": False},
 }
+# The rules a tag ruleset can have: GitHub's ruleset page offers the rest for branches only.
+TAG_RULES = {
+    "creation",
+    "update",
+    "deletion",
+    "required_linear_history",
+    "required_deployments",
+    "required_signatures",
+    "non_fast_forward",
+    "commit_message_pattern",
+    "commit_author_email_pattern",
+    "committer_email_pattern",
+    "tag_name_pattern",
+}
+# The rules a branch ruleset can have.
+BRANCH_RULES = set(RULES) - {"tag_name_pattern"}
+ALLOWED_RULES = {"branch": BRANCH_RULES, "tag": TAG_RULES}
 # Parameters ensure sends only when pyproject.toml gives them (the rest it always sends).
 OPTIONAL = {"required_reviewers", "name"}
 # Parameters that are lists of tables; the rest that are lists are lists of strings.
@@ -110,12 +132,12 @@ def _normal(value: Any) -> Any:
     return value
 
 
-def short_ref(pattern: str) -> str:
-    return pattern.removeprefix("refs/heads/")
+def short_ref(pattern: str, target: str = "branch") -> str:
+    return pattern.removeprefix(TARGETS[target])
 
 
-def _full_ref(pattern: str) -> str:
-    return pattern if pattern.startswith(("~", "refs/")) else f"refs/heads/{pattern}"
+def _full_ref(pattern: str, target: str) -> str:
+    return pattern if pattern.startswith(("~", "refs/")) else f"{TARGETS[target]}{pattern}"
 
 
 def _toml_key(name: str) -> str:
@@ -228,13 +250,28 @@ def _load_actor(where: str, entry: Any) -> dict[str, Any]:
     return actor | ({"mode": mode} if mode != "always" else {})
 
 
+def _load_patterns(where: str, entry: dict[str, Any], key: str, target: str) -> list[str]:
+    patterns = config.string_list(entry, key, [], where)
+    other = next(prefix for t, prefix in TARGETS.items() if t != target)
+    for pattern in patterns:
+        if pattern.startswith(other) or (target == "tag" and pattern == "~DEFAULT_BRANCH"):
+            raise config.ConfigError(f"{where} {key} names {pattern}, which isn't a {target}")
+    return sorted({short_ref(p, target) for p in patterns})
+
+
 def _load_ruleset(where: str, entry: dict[str, Any]) -> dict[str, Any]:
-    if "target" in entry:
-        raise config.ConfigError(f"{where} can't set target: repoutils manages branch rulesets only")
     unknown = sorted(set(entry) - set(KEYS))
     if unknown:
         raise config.ConfigError(f"{where} has unknown setting(s): {', '.join(unknown)}")
     ruleset: dict[str, Any] = {}
+    target = entry.get("target", "branch")
+    if target not in TARGETS:
+        raise config.ConfigError(
+            f"{where} target must be one of {', '.join(map(config.toml_string, TARGETS))} "
+            "(repoutils doesn't manage push rulesets)"
+        )
+    if target != "branch":
+        ruleset["target"] = target
     enforcement = entry.get("enforcement", "active")
     if enforcement not in ENFORCEMENTS:
         raise config.ConfigError(
@@ -243,8 +280,7 @@ def _load_ruleset(where: str, entry: dict[str, Any]) -> dict[str, Any]:
     if enforcement != "active":
         ruleset["enforcement"] = enforcement
     for key in ("include", "exclude"):
-        patterns = sorted({short_ref(p) for p in config.string_list(entry, key, [], where)})
-        if patterns:
+        if patterns := _load_patterns(where, entry, key, target):
             ruleset[key] = patterns
     bypass = entry.get("bypass", [])
     if not isinstance(bypass, list):
@@ -260,12 +296,19 @@ def _load_ruleset(where: str, entry: dict[str, Any]) -> dict[str, Any]:
             raise config.ConfigError(f"{where} has an unknown rule {key} (rules are named like non-fast-forward)")
         if not isinstance(value, dict | bool):
             raise config.ConfigError(f"{where} rules.{key} must be true, false or a table")
+        if _snake(key) not in ALLOWED_RULES[target]:
+            other = "tag" if target == "branch" else "branch"
+            raise config.ConfigError(
+                f"{where} rules.{key} applies only to {other} rulesets, and this is a {target} one"
+            )
         if value is not False:
             loaded[key] = _load_rule(f"{where} rules.{key}", _snake(key), {} if value is True else value)
     if loaded:
         ruleset["rules"] = loaded
     if "include" not in ruleset:
-        raise config.ConfigError(f'{where} needs include, the branches it targets (e.g. ["~DEFAULT_BRANCH"])')
+        example = '"~DEFAULT_BRANCH"' if target == "branch" else '"v*"'
+        plural = "branches" if target == "branch" else "tags"
+        raise config.ConfigError(f"{where} needs include, the {plural} it targets (e.g. [{example}])")
     return ruleset
 
 
@@ -335,11 +378,13 @@ def _check_from_github(check: dict[str, Any], names: Names) -> dict[str, Any]:
 def from_github(ruleset: dict[str, Any], names: Names) -> dict[str, Any]:
     """GitHub's ruleset (as its API or a JSON export gives it) as load_rulesets gives it."""
     result: dict[str, Any] = {}
-    if ruleset.get("enforcement", "active") != "active":
-        result["enforcement"] = ruleset["enforcement"]
+    for key, default in DEFAULTS.items():
+        if ruleset.get(key, default) != default:
+            result[key] = ruleset[key]
+    target = result.get("target", "branch")
     ref_name = (ruleset.get("conditions") or {}).get("ref_name") or {}
     for key in ("include", "exclude"):
-        patterns = sorted({short_ref(p) for p in ref_name.get(key) or []})
+        patterns = sorted({short_ref(p, target) if target in TARGETS else p for p in ref_name.get(key) or []})
         if patterns:
             result[key] = patterns
     if "bypass_actors" not in ruleset:
@@ -400,11 +445,14 @@ def to_github(name: str, ruleset: dict[str, Any], names: Names) -> dict[str, Any
                 ]
             full[param] = _keys(value, _snake)
         rules.append({"type": rule_type} | ({"parameters": full} if RULES[rule_type] else {}))
+    target = ruleset.get("target", "branch")
     return {
         "name": name,
-        "target": "branch",
+        "target": target,
         "enforcement": ruleset.get("enforcement", "active"),
-        "conditions": {"ref_name": {k: [_full_ref(p) for p in ruleset.get(k, [])] for k in ("include", "exclude")}},
+        "conditions": {
+            "ref_name": {k: [_full_ref(p, target) for p in ruleset.get(k, [])] for k in ("include", "exclude")}
+        },
         "bypass_actors": [_actor_to_github(actor, names) for actor in ruleset.get("bypass", [])],
         "rules": rules,
     }
@@ -426,7 +474,7 @@ def diff(theirs: dict[str, Any], ours: dict[str, Any]) -> list[str]:
     """How GitHub's ruleset (theirs) differs from pyproject.toml's (ours), both as load_rulesets gives them."""
     changes = []
     for key in KEYS[:-1]:
-        default = "active" if key == "enforcement" else []
+        default = DEFAULTS.get(key, [])
         changes += _differences(key, theirs.get(key, default), ours.get(key, default))
     their_rules, our_rules = theirs.get("rules", {}), ours.get("rules", {})
     for key in [*our_rules, *(k for k in their_rules if k not in our_rules)]:
@@ -478,6 +526,12 @@ def dump_toml(rulesets: Iterable[dict[str, Any]], names: Names) -> tuple[str, li
             if "actor-type" in entry:
                 warnings.append(f"{name}: repoutils doesn't know the bypass actor type {entry['actor-type']}")
         warnings += [f"{name}: repoutils doesn't know the rule {key}" for key in rules if _snake(key) not in RULES]
+        target = values.get("target", "branch")
+        if target not in TARGETS:
+            warnings.append(f"{name}: repoutils doesn't manage {target} rulesets")
+        else:
+            other = [key for key in rules if _snake(key) in RULES and _snake(key) not in ALLOWED_RULES[target]]
+            warnings += [f"{name}: check refuses rule {key} in a {target} ruleset" for key in other]
         if "include" not in values:
-            warnings.append(f"{name}: it targets no branch, so check refuses it without an include")
+            warnings.append(f"{name}: it targets no {target}, so check refuses it without an include")
     return "\n".join(entries), list(dict.fromkeys(warnings))

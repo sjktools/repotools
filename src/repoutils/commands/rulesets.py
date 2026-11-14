@@ -1,26 +1,27 @@
-"""Check that a repository has the branch rulesets pyproject.toml defines, or
+"""Check that a repository has the branch and tag rulesets pyproject.toml defines, or
 create and update them so it does.
 
 Each ruleset is a ``[tool.repoutils.rulesets.<name>]`` table that gives only
 what differs from a new ruleset's defaults: anything it leaves out is off (a
 rule), empty (``include``, ``exclude`` and ``bypass``) or the default (a
 rule's parameter, and ``enforcement``, which is ``"active"``). So the table is
-the whole ruleset, and ``ensure`` turns off what it leaves out. Rules and
+the whole ruleset, and ``ensure`` turns off what it leaves out. ``target``
+is ``"branch"`` unless the table gives ``"tag"``. Rules and
 their parameters have the names GitHub's REST API (and a ruleset's JSON
 export) gives them, in kebab case. GitHub Apps and teams are named by slug,
 which ``check`` and ``ensure`` look up the IDs of.
 
-Only the repository's own branch rulesets are managed: not tag or push
+Only the repository's own branch and tag rulesets are managed: not push
 rulesets, ones it inherits from its organization, or legacy branch
 protection rules. A rule parameter repoutils doesn't know of is ignored.
 
 ``ensure`` creates every missing ruleset and replaces every one that differs,
 then fails if GitHub didn't apply a change. It never deletes a ruleset.
 ``check`` fails exactly when ``ensure`` would change something; with
-``--fail-on-unexpected`` it also fails on branch rulesets the repository has
+``--fail-on-unexpected`` it also fails on branch and tag rulesets the repository has
 that pyproject.toml doesn't define.
 
-``dump`` prints every branch ruleset the repository has (or that ruleset JSON
+``dump`` prints every branch and tag ruleset the repository has (or that ruleset JSON
 exports from GitHub give) as these tables, to paste into pyproject.toml
 (``check`` then passes) and edit. GitHub has no API that gives a GitHub App's
 slug from its ID, so ``dump`` finds slugs from the apps that ran checks on the
@@ -43,6 +44,7 @@ from typing import Any
 from repoutils import github
 from repoutils.ruleset_format import (
     TABLE,
+    TARGETS,
     Names,
     diff,
     dump_toml,
@@ -86,14 +88,14 @@ def _pages(url: str, token: str, key: str | None = None) -> list[dict[str, Any]]
 
 
 def repo_rulesets(repo: str, token: str) -> list[dict[str, Any]]:
-    """A summary of each of the repository's own branch rulesets."""
+    """A summary of each of the repository's own branch and tag rulesets."""
     rulesets: list[dict[str, Any]] = []
     page = 1
     while True:
         url = f"{github.API_URL}/repos/{repo}/rulesets?includes_parents=false&per_page={PER_PAGE}&page={page}"
         batch = github.request("GET", url, token)
         rulesets += [
-            r for r in batch if r.get("target") == "branch" and r.get("source_type", "Repository") == "Repository"
+            r for r in batch if r.get("target") in TARGETS and r.get("source_type", "Repository") == "Repository"
         ]
         if len(batch) < PER_PAGE:
             return rulesets
@@ -145,7 +147,7 @@ def discover(repo: str, token: str, rulesets: list[dict[str, Any]]) -> Names:
     app_ids, team_ids = _ids(rulesets, "Integration"), _ids(rulesets, "Team")
     if app_ids:
         branches = [github.request("GET", f"{github.API_URL}/repos/{repo}", token)["default_branch"]]
-        for r in rulesets:
+        for r in (r for r in rulesets if r.get("target", "branch") == "branch"):
             for pattern in ((r.get("conditions") or {}).get("ref_name") or {}).get("include") or []:
                 branch = short_ref(pattern)
                 if not branch.startswith(("~", "refs/")) and not set("*?[") & set(branch) and branch not in branches:
@@ -176,13 +178,13 @@ def dump(repo: str, token: str, files: list[str]) -> int:
             if not all(isinstance(r, dict) for r in (loaded if isinstance(loaded, list) else [loaded])):
                 raise ValueError(f"{path} must hold a ruleset JSON object, or a list of them")
             rulesets += loaded if isinstance(loaded, list) else [loaded]
-        for r in [r for r in rulesets if r.get("target", "branch") != "branch"]:
-            print(f"Left out {r.get('name')!r}: it's a {r.get('target')} ruleset, not a branch one", file=sys.stderr)
-        rulesets = [r for r in rulesets if r.get("target", "branch") == "branch"]
+        for r in [r for r in rulesets if r.get("target", "branch") not in TARGETS]:
+            print(f"Left out {r.get('name')!r}: repoutils doesn't manage {r.get('target')} rulesets", file=sys.stderr)
+        rulesets = [r for r in rulesets if r.get("target", "branch") in TARGETS]
     else:
         rulesets = [get_ruleset(repo, token, r["id"]) for r in repo_rulesets(repo, token)]
         if not rulesets:
-            print(f"{repo} has no branch rulesets.", file=sys.stderr)
+            print(f"{repo} has no branch or tag rulesets.", file=sys.stderr)
     text, warnings = dump_toml(rulesets, discover(repo, token, rulesets))
     print(text, end="")
     for warning in warnings:
@@ -204,7 +206,7 @@ class Plan:
 
 
 def plans(repo: str, token: str, rulesets: dict[str, dict[str, Any]]) -> tuple[list[Plan], list[str], Names]:
-    """What ensure does for each ruleset, the names of every branch ruleset the
+    """What ensure does for each ruleset, the names of every branch and tag ruleset the
     repository has, and the IDs of the apps and teams the rulesets name."""
     existing = {r["name"]: r["id"] for r in repo_rulesets(repo, token)}
     names = resolve(repo, token, rulesets.values())
@@ -239,7 +241,7 @@ def check(
         print(f"{failing} of {len(rulesets)} ruleset(s) in {repo} need `repoutils rulesets ensure`.")
     if unexpected:
         print(
-            f"{len(unexpected)} branch ruleset(s) in {repo} aren't defined in pyproject.toml: "
+            f"{len(unexpected)} branch or tag ruleset(s) in {repo} aren't defined in pyproject.toml: "
             "add them there (`repoutils rulesets dump` prints them) or delete them on GitHub."
         )
     if failing or unexpected:
@@ -291,8 +293,8 @@ def main(argv: list[str]) -> int:
     )
     dump_parser = subparsers.add_parser(
         "dump",
-        help="print the repository's branch rulesets as pyproject.toml tables",
-        description=f"Print every branch ruleset the repository has as {TABLE} sub-tables, to paste into "
+        help="print the repository's branch and tag rulesets as pyproject.toml tables",
+        description=f"Print every branch and tag ruleset the repository has as {TABLE} sub-tables, to paste into "
         "pyproject.toml.",
     )
     for sub in (check_parser, ensure_parser, dump_parser):
@@ -309,7 +311,7 @@ def main(argv: list[str]) -> int:
     check_parser.add_argument(
         "--fail-on-unexpected",
         action="store_true",
-        help="also fail on branch rulesets the repository has that pyproject.toml doesn't define "
+        help="also fail on branch and tag rulesets the repository has that pyproject.toml doesn't define "
         "(ensure leaves them alone)",
     )
     dump_parser.add_argument(
