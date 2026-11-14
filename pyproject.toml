@@ -132,6 +132,14 @@ allowed-tags = ["v*"]
 [tool.repoutils.environments.testpypi]
 deployment-branches = "all"
 
+# The deploy keys `repoutils deploy-keys` checks or creates. ci.yml's release
+# job pushes v* tags with release's private half, which only the release
+# environment holds; the release-tags-create ruleset lets only deploy keys
+# create a v* tag.
+[tool.repoutils.deploy-keys.release]
+write = true
+secret = { environment = "release", name = "RELEASE_DEPLOY_KEY" }
+
 # The rulesets `repoutils rulesets` checks or creates, each giving only
 # what differs from a new ruleset's defaults. main changes only by a squash-merged
 # PR whose CI passed: every test job (GitHub counts a skipped required check as

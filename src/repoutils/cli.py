@@ -63,6 +63,9 @@ GROUPS: dict[str, list[Command]] = {
         Command("repo-settings", "repo_settings", "Check or change the repository settings pyproject.toml gives"),
         Command("environments", "environments", "Check or create the deployment environments pyproject.toml defines"),
         Command("secrets", "secrets", "Check the repository has the secrets pyproject.toml names"),
+        Command(
+            "deploy-keys", "deploy_keys", "Check or create the deploy keys pyproject.toml declares, and their secrets"
+        ),
         Command("rulesets", "rulesets", "Check, create or update the branch rulesets pyproject.toml defines"),
         Command("actions-settings", "actions_settings", "Check or change the Actions settings pyproject.toml gives"),
         Command("security-settings", "security_settings", "Check or change the security settings pyproject.toml gives"),
