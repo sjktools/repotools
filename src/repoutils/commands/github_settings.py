@@ -38,8 +38,10 @@ def _has_table(name: str) -> Callable[[dict[str, Any]], bool]:
 
 def _has_secrets(table: dict[str, Any]) -> bool:
     # [tool.repoutils.secrets] with only `other` is for `secrets check-workflows`, which `secrets check` refuses.
-    listed = table.get("secrets")
-    return isinstance(listed, dict) and any(key in listed for key in ("actions", "dependabot", "environments"))
+    # Loading it raises ConfigError if it's malformed, so a bad table fails rather than being skipped.
+    if "secrets" not in table:
+        return False
+    return bool(secrets.load_secrets()) or secrets.load_environment_secrets() is not None
 
 
 @dataclass(frozen=True)
