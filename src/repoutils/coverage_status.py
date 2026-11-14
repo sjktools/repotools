@@ -31,8 +31,7 @@ from repoutils import config, github
 DEFAULT_PROJECT_STATUS = "coverage/project"
 DEFAULT_PATCH_STATUS = "coverage/patch"
 # The points project coverage may fall, and patch coverage may sit below the
-# base's project coverage, before the patch coverage comment warns: what the
-# thresholds in repoutils' codecov.yml allowed.
+# base's project coverage, before the patch coverage comment warns.
 DEFAULT_WARN_PROJECT_DROP = 2.0
 DEFAULT_WARN_PATCH_BELOW = 1.0
 NO_PATCH_LINES = "no changed lines to cover"

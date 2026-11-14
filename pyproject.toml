@@ -105,7 +105,7 @@ push-protection = true
 
 # The secrets `repoutils secrets` checks the repository has (see AGENTS.md).
 [tool.repoutils.secrets]
-actions = ["AUTOFIX_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "CODECOV_TOKEN", "GH_ACTIONS_TOKEN"]
+actions = ["AUTOFIX_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "GH_ACTIONS_TOKEN"]
 dependabot = ["DEPENDABOT_FIX_TOKEN"]
 
 # The deployment environments `repoutils environments` checks or creates:

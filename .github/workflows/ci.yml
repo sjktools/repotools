@@ -126,17 +126,6 @@ jobs:
         run: just coverage --cov-report="markdown-append:${GITHUB_STEP_SUMMARY}"
 
 
-      # Codecov Test Analytics, from the junit.xml `just coverage` writes. Runs
-      # even if the tests failed, as that's when the results matter most.
-      - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v7.1.1
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: junit.xml
-          report_type: test_results
-          disable_search: true
-
       # The lines a PR changes, or on main the lines the commit changes.
       - name: Report patch coverage
         run: just diff-cover "$BASE" --format markdown:patch-coverage.md,json:patch-coverage.json
@@ -185,21 +174,13 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           GITHUB_TOKEN: ${{ github.token }}
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7.1.1
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage.xml
-          disable_search: true
-          fail_ci_if_error: true
-
   # Post the patch-coverage artifact (diff-cover's Markdown report) to the PR
   # as a github-actions[bot] comment, or edit the one posted before, so it's
-  # seen without opening the coverage job's summary or Codecov. It adds the
+  # seen without opening the coverage job's summary. It adds the
   # project's coverage from the coverage-status artifact, and its change from
   # the base's coverage/project status, which the coverage job waited for, and
   # warns when either falls short (never failing for that). Runs whenever
-  # the coverage job uploaded the report, even if a Codecov step then failed.
+  # the coverage job uploaded the report.
   # Only for PRs from this repo: on a fork's or Dependabot's PR, GITHUB_TOKEN
   # is read-only. Queued per PR, and posts only if HEAD_SHA is still the PR's
   # head, so an older commit's run that finishes last can't overwrite a newer

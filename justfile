@@ -27,9 +27,9 @@ sync:
 test:
     uv run --group dev pytest -q
 
-# Run the test suite with coverage, printing a report and writing coverage.xml and junit.xml
+# Run the test suite with coverage, printing a report and writing coverage.xml
 coverage *args:
-    uv run --group dev pytest -q --cov --cov-report=term-missing --cov-report=xml --junitxml=junit.xml -o junit_family=legacy {{ args }}
+    uv run --group dev pytest -q --cov --cov-report=term-missing --cov-report=xml {{ args }}
 
 # Run coverage, then report coverage of the lines changed since base
 patch-coverage base='origin/main': coverage (diff-cover base)

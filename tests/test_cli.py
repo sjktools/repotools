@@ -31,6 +31,7 @@ def test_help_lists_every_command_by_group(capsys: pytest.CaptureFixture[str]) -
     assert "Repo hygiene:" in out
     for name in cli.COMMANDS:
         assert f"    {name} " in out
+    assert "Wait for a PR base's coverage/project status" in out
 
 
 def test_no_arguments_is_a_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
