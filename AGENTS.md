@@ -98,7 +98,7 @@ Releases are cut from `main`.
 The Bump Version workflow opens a PR bumping `version` in `pyproject.toml`.
 Once it merges, the `release` job in `ci.yml` tags `v<version>` and creates a GitHub release (with the `GH_ACTIONS_TOKEN` secret, so the tag push triggers the Publish workflow).
 `publish-pypi.yml` then builds once, publishes to TestPyPI and checks the release installs from there.
-Only then does it publish the same files to PyPI, and check they install from PyPI.
+Only then, once a maintainer approves the `pypi` environment deployment, does it publish the same files to PyPI, and check they install from PyPI.
 It publishes with PEP 740 attestations, through trusted publishing (no API token).
 
 Two comments act on an open PR from this repository, when the comment is just the command.

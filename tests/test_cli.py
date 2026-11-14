@@ -344,6 +344,8 @@ def test_this_repos_environments_load() -> None:
     # Only a v* tag may deploy to pypi (issue #3).
     by_name = {environment.name: environment.settings for environment in load_environments(ROOT)}
     assert by_name["pypi"]["allowed-tags"] == ["v*"]
+    assert by_name["pypi"]["reviewers"] == ["skissane"]
+    assert by_name["pypi"]["prevent-self-review"] is False
     assert by_name["testpypi"]["deployment-branches"] == "all"
 
 
