@@ -1,6 +1,7 @@
 import io
 import re
 import subprocess
+import tomllib
 import urllib.error
 from email.message import Message
 from pathlib import Path
@@ -344,6 +345,7 @@ def test_dump(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.Ca
     # dump doesn't need pyproject.toml to set anything.
     assert _run(tmp_path, monkeypatch, FakeGitHub(EVERYTHING), ["dump"], "") == 0
     out, err = capsys.readouterr()
+    tomllib.loads(out)
     assert err == ""
     assert out == (
         "[tool.repoutils.actions-settings]\n"
@@ -390,6 +392,7 @@ def test_dump_leaves_out_what_it_cant_give(
     # The selected actions aren't in effect, so it doesn't ask for them.
     assert ("GET", SELECTED.path, None) not in gh.calls
     out, err = capsys.readouterr()
+    tomllib.loads(out)
     assert out == (
         "[tool.repoutils.actions-settings]\n"
         'allowed-actions = "owner"\n'
@@ -424,6 +427,7 @@ def test_dump_fails_on_other_http_errors(
 
 def test_dump_with_actions_disabled() -> None:
     text, skipped = actions_settings.dump_toml({PERMISSIONS: {"enabled": False}, SELECTED: None})
+    tomllib.loads(text)
     assert text == '[tool.repoutils.actions-settings]\nallowed-actions = "disabled"\n'
     assert skipped == ["require-sha-pinning: GitHub didn't return sha_pinning_required"]
 
@@ -437,6 +441,7 @@ def test_dump_gives_selected_actions_only_with_allowed_actions() -> None:
     # Were allowed-actions left out, check would refuse the selected actions.
     responses = {PERMISSIONS: {"enabled": True, "allowed_actions": 1}, SELECTED: MATCHING[SELECTED.path]}
     text, _ = actions_settings.dump_toml(responses)
+    tomllib.loads(text)
     assert "selected" not in text
 
 
@@ -465,5 +470,6 @@ def test_a_field_github_leaves_out_is_a_difference() -> None:
 
 def test_dump_doesnt_miss_claim_keys_with_the_default_template() -> None:
     text, skipped = actions_settings.dump_toml({OIDC: {"use_default": True, "use_immutable_subject": True}})
+    tomllib.loads(text)
     assert "use-default-subject = true\n" in text
     assert skipped == []

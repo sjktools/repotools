@@ -1,5 +1,6 @@
 import os
 import subprocess
+import tomllib
 from collections.abc import Callable
 from pathlib import Path
 
@@ -7,6 +8,16 @@ import pytest
 
 from repoutils import github
 from repoutils.commands import github_settings
+from tests import (
+    test_actions_settings,
+    test_deploy_keys,
+    test_environments,
+    test_labels,
+    test_repo_settings,
+    test_rulesets,
+    test_secrets,
+    test_security_settings,
+)
 
 ALL = [command.name for command in github_settings.COMMANDS]
 
@@ -92,6 +103,23 @@ def test_fails_if_nothing_is_configured(calls: Calls, capsys: pytest.CaptureFixt
     assert github_settings.main(["check", "--repo", "o/r"]) == 1
     assert calls == []
     assert "configures none of the GitHub settings commands" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "secrets_table",
+    [
+        'secrets = ["TOKEN"]',
+        '[tool.repoutils.secrets]\nbogus = ["TOKEN"]',
+        '[tool.repoutils.secrets]\nactions = "TOKEN"',
+    ],
+)
+def test_bad_secrets_table_fails_rather_than_being_skipped(
+    calls: Calls, capsys: pytest.CaptureFixture[str], secrets_table: str
+) -> None:
+    _write(f"[tool.repoutils]\n{secrets_table}\n" if secrets_table.startswith("secrets") else secrets_table + "\n")
+    assert github_settings.main(["check", "--repo", "o/r", "--exit-zero"]) == 1
+    assert calls == []
+    assert "secrets" in capsys.readouterr().err
 
 
 def test_bad_pyproject_fails(calls: Calls, capsys: pytest.CaptureFixture[str]) -> None:
@@ -185,3 +213,41 @@ def test_gh_failure_fails(calls: Calls, monkeypatch: pytest.MonkeyPatch, capsys:
     assert github_settings.main(["dump", "--repo", "o/r"]) == 1
     assert calls == []
     assert "not logged in" in capsys.readouterr().err
+
+
+def test_real_dumps_join_into_valid_toml(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    # Each command's own test fake, swapped in while that command runs, as some APIs (the repository, its
+    # environments) are read by more than one command.
+    fakes: dict[str, Callable[..., object]] = {
+        "labels": test_labels.FakeGitHub(test_labels.TRICKY),
+        "repo-settings": test_repo_settings.FakeGitHub(test_repo_settings.EVERYTHING),
+        "rulesets": test_rulesets.FakeGitHub(test_rulesets.MATCHING, test_rulesets.TAG_RULESET),
+        "environments": test_environments.FakeGitHub([test_environments._env("pypi", wait=10)]),
+        "actions-settings": test_actions_settings.FakeGitHub(test_actions_settings.EVERYTHING),
+        "secrets": test_secrets.FakeGitHub(["ALPHA"], [], {"pypi": ["TOKEN"]}),
+        "deploy-keys": test_deploy_keys.FakeGitHub([test_deploy_keys._key(1, "release", write=True)]),
+        "security-settings": test_security_settings.FakeGitHub(test_security_settings.MATCHING),
+    }
+
+    def with_fake(command: github_settings.Command) -> Callable[[list[str]], int]:
+        def run(args: list[str]) -> int:
+            monkeypatch.setattr(github, "request", fakes[command.name])
+            return command.run(args)
+
+        return run
+
+    monkeypatch.setattr(
+        github_settings,
+        "COMMANDS",
+        [
+            github_settings.Command(c.name, with_fake(c), c.configured, c.has_ensure, c.has_fail_on_unexpected)
+            for c in github_settings.COMMANDS
+        ],
+    )
+    assert github_settings.main(["dump", "--repo", "o/r"]) == 0
+    dumped = tomllib.loads(capsys.readouterr().out)["tool"]["repoutils"]
+    assert list(dumped) == ALL

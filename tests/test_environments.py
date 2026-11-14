@@ -1,6 +1,7 @@
 import io
 import re
 import subprocess
+import tomllib
 import urllib.error
 import urllib.parse
 from email.message import Message
@@ -454,6 +455,7 @@ def test_dump_round_trips(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsy
     assert _run(tmp_path, monkeypatch, gh, ["dump"], config) == 0
     assert (tmp_path / "pyproject.toml").read_text() == config
     out, err = capsys.readouterr()
+    tomllib.loads(out)
     assert err == ""
     assert out == (
         "[tool.repoutils.environments.pypi]\n"

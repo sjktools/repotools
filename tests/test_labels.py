@@ -1,6 +1,7 @@
 import io
 import re
 import subprocess
+import tomllib
 import urllib.error
 from email.message import Message
 from pathlib import Path
@@ -328,6 +329,7 @@ def test_dump_round_trips(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsy
     # dump doesn't need pyproject.toml to define any labels.
     assert _run(tmp_path, monkeypatch, FakeGitHub(TRICKY), ["dump"], "") == 0
     out = capsys.readouterr().out
+    tomllib.loads(out)
     assert out.startswith('[[tool.repoutils.labels]]\nname = "bug"\ncolor = "d73a4a"\n')
     assert '[[tool.repoutils.labels]]\nname = "no description"\ncolor = "c2e0c6"\n\n' in out
     # Pasted into pyproject.toml, it defines every label exactly as GitHub has it.
@@ -342,7 +344,7 @@ def test_dump_reads_every_page(
 ) -> None:
     monkeypatch.setattr(labels, "PER_PAGE", 2)
     assert _run(tmp_path, monkeypatch, FakeGitHub(MATCHING), ["dump"], "") == 0
-    assert capsys.readouterr().out.count("[[tool.repoutils.labels]]") == 4
+    assert len(tomllib.loads(capsys.readouterr().out)["tool"]["repoutils"]["labels"]) == 4
 
 
 def test_dump_no_labels(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
