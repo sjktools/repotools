@@ -12,11 +12,13 @@ _USE_RE = re.compile(r"\bsecrets\s*(?:\.|\[\s*['\"])\s*([A-Za-z_][A-Za-z0-9_]*)"
 _BUILT_IN = "GITHUB_TOKEN"
 # A workflow's top-level jobs key, and a key (such as a job's id) that starts a block.
 _JOBS_RE = re.compile(r"jobs\s*:\s*")
-_BLOCK_KEY_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_-]*)\s*:(?:\s+(.*))?")
+_BLOCK_KEY_RE = re.compile(r"(['\"]?)([A-Za-z_][A-Za-z0-9_-]*)\1\s*:(?:\s+(.*))?")
+# A value's leading anchors (&name) and tags (!tag), which don't make it a flow mapping.
+_ANCHORS_AND_TAGS_RE = re.compile(r"(?:[&!]\S*\s*)+")
 # A job's environment key, with its value if it's on the same line.
 _ENVIRONMENT_RE = re.compile(r"environment\s*:\s*(.*)")
 # The name in an environment mapping, block or flow.
-_NAME_IN_MAPPING_RE = re.compile(r"(?:^|[{,])\s*(['\"]?)name\1\s*:\s*([^,}]+)")
+_NAME_IN_MAPPING_RE = re.compile(r"(?:^|[{,])\s*(['\"]?)name\1\s*:\s*(\"[^\"]*\"|'[^']*'|[^,}]+)")
 # A job's environment that only an expression gives, so it can't be known.
 UNKNOWN = "${{ }}"
 
@@ -128,7 +130,9 @@ def jobs(file: str, lines: list[str]) -> list[Job]:
         if line.strip() and _indent(line) == job_indent:
             match = _BLOCK_KEY_RE.fullmatch(line.strip())
             if match:
-                bodies.append((match[1], [match[2] or ""], bool(match[2] and match[2].strip())))
+                value = match[3] or ""
+                flow = bool(_ANCHORS_AND_TAGS_RE.sub("", value, count=1).strip())
+                bodies.append((match[2], [value], flow))
         elif bodies:
             bodies[-1][1].append(line)
     return [

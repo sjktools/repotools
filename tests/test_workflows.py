@@ -15,6 +15,11 @@ from repoutils import workflows
         ('jobs:\n  a:\n    environment: {"name": "staging"}\n', [("a", "staging")]),
         ("jobs:\n  a:\n    environment:\n      'name': prod\n", [("a", "prod")]),
         ("jobs:\n  a:\n    environment: {\"name': x}\n", [("a", workflows.UNKNOWN)]),
+        # A quoted name may hold a comma, and a quoted job id is a job's.
+        ("jobs:\n  'a':\n    environment: {name: \"prod,us\", url: x}\n", [("a", "prod,us")]),
+        ("jobs:\n  \"a\":\n    environment:\n      name: 'prod,us'\n      url: x\n", [("a", "prod,us")]),
+        # An anchor or tag doesn't make a job a flow mapping, but what follows it can.
+        ("jobs:\n  a: &a\n    environment: prod\n  b: !!map {}\n", [("a", "prod"), ("b", workflows.UNKNOWN)]),
         # A line that isn't a job's id starts no job.
         ("jobs:\n  - a\n  b:\n", [("b", None)]),
     ],
