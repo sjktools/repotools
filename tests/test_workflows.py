@@ -34,6 +34,21 @@ from repoutils import workflows
         ),
         # An escaped quote doesn't end a quoted name, so a # after it isn't a comment.
         ('jobs:\n  a:\n    environment: "pr\\"od # x"\n', [("a", 'pr"od # x')]),
+        # Only a block mapping's direct entries count, not lines in an entry's value.
+        (
+            "jobs:\n  a:\n    environment:\n      url: >-\n        x\n        name: prod\n      name: staging\n",
+            [("a", "staging")],
+        ),
+        ("jobs:\n  a:\n    environment:\n      url: x\n\n      name: staging\n", [("a", "staging")]),
+        # A name this can't read is unknown: a flow mapping over several lines, an
+        # alias, a block scalar or a collection.
+        ("jobs:\n  a:\n    environment: {name: prod,\n      url: x}\n", [("a", workflows.UNKNOWN)]),
+        ("jobs:\n  a:\n    environment: *env\n", [("a", workflows.UNKNOWN)]),
+        ("jobs:\n  a:\n    environment:\n      name: |\n        prod\n", [("a", workflows.UNKNOWN)]),
+        ("jobs:\n  a:\n    environment: {name: [prod]}\n", [("a", workflows.UNKNOWN)]),
+        # An anchor or tag on a name is skipped.
+        ("jobs:\n  a:\n    environment: &e !!str prod\n", [("a", "prod")]),
+        ("jobs:\n  a:\n    environment: &e\n      name: !!str prod\n", [("a", "prod")]),
         # An anchor or tag doesn't make a job a flow mapping, but what follows it can.
         ("jobs:\n  a: &a\n    environment: prod\n  b: !!map {}\n", [("a", "prod"), ("b", workflows.UNKNOWN)]),
         # A line that isn't a job's id starts no job.

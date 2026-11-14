@@ -282,6 +282,8 @@ def check(
         existing_environments = {name.lower(): name for name in repo_environments(repo, token)}
         to_check = dict(environments)
         if fail_on_unexpected:
+            # Every other environment the repository has may have no secrets. They
+            # come from existing_environments, so none is reported as missing.
             listed = {name.lower() for name in environments}
             to_check.update({name: [] for lower, name in existing_environments.items() if lower not in listed})
         for name, names in to_check.items():

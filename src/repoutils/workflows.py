@@ -68,8 +68,18 @@ def _mapping_name(entries: list[str]) -> str:
     for entry in entries:
         key, *value = _split(entry, ":")
         if value and _unquote(key) == "name":
-            return _unquote(":".join(value))
+            return _scalar(":".join(value))
     return UNKNOWN
+
+
+def _scalar(value: str) -> str:
+    """The name a scalar value gives, past any anchor or tag, or UNKNOWN if it
+    isn't one this reads: an alias, a block scalar, a collection or an expression."""
+    value = _ANCHORS_AND_TAGS_RE.sub("", value.strip(), count=1)
+    if not value or value[0] in "*|>{[":
+        return UNKNOWN
+    name = _unquote(value)
+    return UNKNOWN if "${{" in name else name
 
 
 def workflow_lines(root: Path) -> list[tuple[str, list[str]]]:
@@ -133,20 +143,22 @@ def _environment(body: list[str]) -> str | None:
         match = _ENVIRONMENT_RE.fullmatch(line.strip()) if _indent(line) == indent else None
         if not match:
             continue
-        value = match[1].strip()
-        if value.startswith("{") and value.endswith("}"):
-            name = _mapping_name(_split(value[1:-1], ","))
-        elif value:
-            name = _unquote(value)
-        else:
-            # A block mapping, an entry on each line indented under environment.
-            mapping: list[str] = []
-            for nested in body[i + 1 :]:
-                if nested.strip() and _indent(nested) <= indent:
-                    break
-                mapping.append(nested.strip())
-            name = _mapping_name(mapping)
-        return UNKNOWN if "${{" in name else name
+        value = _ANCHORS_AND_TAGS_RE.sub("", match[1].strip(), count=1)
+        if value.startswith("{"):
+            # A flow mapping, which this reads only on one line.
+            return _mapping_name(_split(value[1:-1], ",")) if value.endswith("}") else UNKNOWN
+        if value:
+            return _scalar(value)
+        # A block mapping: its entries are the lines indented under environment,
+        # at the first one's indent (deeper ones belong to an entry's value).
+        nested = []
+        for line in body[i + 1 :]:
+            if line.strip() and _indent(line) <= indent:
+                break
+            if line.strip():
+                nested.append(line)
+        entry_indent = _indent(nested[0]) if nested else 0
+        return _mapping_name([line.strip() for line in nested if _indent(line) == entry_indent])
     return None
 
 
