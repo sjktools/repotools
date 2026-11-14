@@ -18,7 +18,10 @@ def test_check_runs_every_command_with_repo_and_exit_zero(monkeypatch: pytest.Mo
     monkeypatch.setattr(
         github_settings,
         "COMMANDS",
-        [github_settings.Command(command.name, fake_main(command.name), command.has_ensure) for command in github_settings.COMMANDS],
+        [
+            github_settings.Command(command.name, fake_main(command.name), command.has_ensure)
+            for command in github_settings.COMMANDS
+        ],
     )
     assert github_settings.main(["check", "--repo", "o/r", "--exit-zero"]) == 0
     assert calls == [
@@ -48,7 +51,10 @@ def test_ensure_skips_commands_without_ensure(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(
         github_settings,
         "COMMANDS",
-        [github_settings.Command(command.name, fake_main(command.name), command.has_ensure) for command in github_settings.COMMANDS],
+        [
+            github_settings.Command(command.name, fake_main(command.name), command.has_ensure)
+            for command in github_settings.COMMANDS
+        ],
     )
     assert github_settings.main(["ensure"]) == 0
     assert calls == [
@@ -72,6 +78,9 @@ def test_returns_non_zero_if_any_command_fails(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(
         github_settings,
         "COMMANDS",
-        [github_settings.Command(command.name, fake_main(command.name), command.has_ensure) for command in github_settings.COMMANDS],
+        [
+            github_settings.Command(command.name, fake_main(command.name), command.has_ensure)
+            for command in github_settings.COMMANDS
+        ],
     )
     assert github_settings.main(["dump"]) == 1
