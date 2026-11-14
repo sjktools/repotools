@@ -28,6 +28,8 @@ LABELS = {
     "required_status_checks.required_status_checks": "Status checks that are required",
     "required_status_checks.strict_required_status_checks_policy": "Require branches to be up to date before merging",
     "non_fast_forward": "Block force pushes",
+    "branch_name_pattern": "Restrict branch names",
+    "tag_name_pattern": "Restrict tag names",
     "workflows": "Require workflows to pass before merging",
     "code_scanning": "Require code scanning results",
     "copilot_code_review": "Automatically request Copilot code review",

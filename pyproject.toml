@@ -120,7 +120,7 @@ allowed-tags = ["v*"]
 [tool.repoutils.environments.testpypi]
 deployment-branches = "all"
 
-# The branch rulesets `repoutils rulesets` checks or creates, each giving only
+# The rulesets `repoutils rulesets` checks or creates, each giving only
 # what differs from a new ruleset's defaults. main changes only by a squash-merged
 # PR whose CI passed: every test job (GitHub counts a skipped required check as
 # passed, so check-and-build, which needs them, isn't enough alone) and the rest
@@ -158,6 +158,26 @@ required-status-checks = [
     { context = "added-strings", app = "github-actions" },
     { context = "post-patch-coverage", app = "github-actions" },
 ]
+
+# Release tags (see #24). Nobody can move or delete a v* tag, admins included:
+# a faulty release is fixed by a new one. Only deploy keys can create one,
+# which is how the release job will tag a release (#39). They're two rulesets because a
+# bypass covers every rule in its ruleset.
+[tool.repoutils.rulesets.release-tags-immutable]
+target = "tag"
+include = ["v*"]
+
+[tool.repoutils.rulesets.release-tags-immutable.rules]
+update = true
+deletion = true
+
+[tool.repoutils.rulesets.release-tags-create]
+target = "tag"
+include = ["v*"]
+bypass = [{ deploy-keys = true }]
+
+[tool.repoutils.rulesets.release-tags-create.rules]
+creation = true
 
 # The issue and PR labels `repoutils labels` checks or creates, as exolot and
 # taxtracker use them (see AGENTS.md); .github/dependabot.yml applies two.

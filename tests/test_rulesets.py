@@ -49,7 +49,35 @@ MATCHING: dict[str, Any] = {
         },
     ],
 }
-TAG_RULESET = {"id": 2, "name": "tags", "target": "tag", "source_type": "Repository", "rules": []}
+PUSH_RULESET = {"id": 2, "name": "pushes", "target": "push", "source_type": "Repository", "rules": []}
+TAG_CONFIG = """
+[tool.repoutils.rulesets.release-tags-immutable]
+target = "tag"
+include = ["v*"]
+
+[tool.repoutils.rulesets.release-tags-immutable.rules]
+deletion = true
+update = true
+
+[tool.repoutils.rulesets.release-tags-create]
+target = "tag"
+include = ["v*"]
+bypass = [{ deploy-keys = true }]
+
+[tool.repoutils.rulesets.release-tags-create.rules]
+creation = true
+"""
+# What GitHub has for TAG_CONFIG's first ruleset.
+TAG_RULESET: dict[str, Any] = {
+    "id": 4,
+    "name": "release-tags-immutable",
+    "target": "tag",
+    "source_type": "Repository",
+    "enforcement": "active",
+    "conditions": {"ref_name": {"include": ["refs/tags/v*"], "exclude": []}},
+    "bypass_actors": [],
+    "rules": [{"type": "deletion"}, {"type": "update", "parameters": {"update_allows_fetch_and_merge": False}}],
+}
 OTHER = MATCHING | {"id": 3, "name": "other", "bypass_actors": []}
 
 
@@ -121,7 +149,7 @@ def _run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, gh: FakeGitHub, argv: 
 def test_nothing_to_do(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], mode: str
 ) -> None:
-    gh = FakeGitHub(MATCHING, TAG_RULESET)
+    gh = FakeGitHub(MATCHING, PUSH_RULESET)
     assert _run(tmp_path, monkeypatch, gh, [mode]) == 0
     assert gh.writes == []
     expected = {
@@ -132,7 +160,7 @@ def test_nothing_to_do(
 
 
 def test_missing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
-    gh = FakeGitHub(TAG_RULESET)
+    gh = FakeGitHub(PUSH_RULESET)
     assert _run(tmp_path, monkeypatch, gh, ["check"]) == 1
     assert capsys.readouterr().out == "main: missing\n1 of 1 ruleset(s) in o/r need `repoutils rulesets ensure`.\n"
     assert _run(tmp_path, monkeypatch, gh, ["ensure"]) == 0
@@ -176,13 +204,15 @@ def test_ensure_fails_if_github_ignores_a_change(
 def test_fail_on_unexpected(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    gh = FakeGitHub(MATCHING, OTHER, TAG_RULESET)
+    gh = FakeGitHub(MATCHING, OTHER, TAG_RULESET, PUSH_RULESET)
     assert _run(tmp_path, monkeypatch, gh, ["check"]) == 0
     capsys.readouterr()
     assert _run(tmp_path, monkeypatch, gh, ["check", "--fail-on-unexpected"]) == 1
+    # A tag ruleset is unexpected too, but not a push ruleset, which repoutils doesn't manage.
     assert capsys.readouterr().out == (
         "other: not defined in pyproject.toml\n"
-        "1 branch ruleset(s) in o/r aren't defined in pyproject.toml: "
+        "release-tags-immutable: not defined in pyproject.toml\n"
+        "2 branch or tag ruleset(s) in o/r aren't defined in pyproject.toml: "
         "add them there (`repoutils rulesets dump` prints them) or delete them on GitHub.\n"
     )
 
@@ -248,11 +278,13 @@ def test_other_http_errors_propagate(
 
 
 def test_dump(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
-    gh = FakeGitHub(MATCHING, TAG_RULESET)
+    gh = FakeGitHub(MATCHING, TAG_RULESET, PUSH_RULESET)
     assert _run(tmp_path, monkeypatch, gh, ["dump"], "") == 0
     out, err = capsys.readouterr()
     assert err == ""
     assert out.startswith('[tool.repoutils.rulesets.main]\ninclude = ["~DEFAULT_BRANCH"]\n')
+    assert '[tool.repoutils.rulesets.release-tags-immutable]\ntarget = "tag"\ninclude = ["v*"]\n' in out
+    assert "pushes" not in out
     # Pasted into pyproject.toml, check passes.
     assert _run(tmp_path, monkeypatch, gh, ["check", "--fail-on-unexpected"], out) == 0
 
@@ -284,20 +316,25 @@ def test_dump_finds_a_known_app_or_warns(
 
 
 def test_dump_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
-    assert _run(tmp_path, monkeypatch, FakeGitHub(TAG_RULESET), ["dump"], "") == 0
-    assert capsys.readouterr() == ("", "o/r has no branch rulesets.\n")
+    assert _run(tmp_path, monkeypatch, FakeGitHub(PUSH_RULESET), ["dump"], "") == 0
+    assert capsys.readouterr() == ("", "o/r has no branch or tag rulesets.\n")
 
 
 def test_dump_from_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     export = MATCHING | {"name": "exported", "conditions": {"ref_name": {"include": ["refs/heads/dev"]}}}
     (tmp_path / "one.json").write_text(json.dumps(export))
-    (tmp_path / "two.json").write_text(json.dumps([TAG_RULESET]))
+    malformed = PUSH_RULESET | {"name": "odd", "target": ["tag"]}
+    (tmp_path / "two.json").write_text(json.dumps([TAG_RULESET, PUSH_RULESET, malformed]))
     argv = ["dump", "--from-file", str(tmp_path / "one.json"), "--from-file", str(tmp_path / "two.json")]
     assert _run(tmp_path, monkeypatch, FakeGitHub(), argv, "") == 0
     out, err = capsys.readouterr()
     assert out.startswith('[tool.repoutils.rulesets.exported]\ninclude = ["dev"]\n')
     assert '{ context = "build", app = "github-actions" }' in out
-    assert err == "Left out 'tags': it's a tag ruleset, not a branch one\n"
+    assert '[tool.repoutils.rulesets.release-tags-immutable]\ntarget = "tag"\ninclude = ["v*"]\n' in out
+    assert err == (
+        "Left out 'pushes': repoutils doesn't manage push rulesets\n"
+        "Left out 'odd': repoutils doesn't manage ['tag'] rulesets\n"
+    )
 
 
 def test_no_rulesets_defined(
@@ -313,14 +350,17 @@ def test_malformed_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsy
 
 
 def test_paginates(monkeypatch: pytest.MonkeyPatch) -> None:
-    pages = {1: [{"id": i, "name": f"r{i}", "target": "branch"} for i in range(100)], 2: [TAG_RULESET, OTHER]}
+    pages = {
+        1: [{"id": i, "name": f"r{i}", "target": "branch"} for i in range(100)],
+        2: [PUSH_RULESET, TAG_RULESET, OTHER],
+    }
 
     def request(method: str, url: str, token: str, **kwargs: Any) -> Any:
         return pages[int(url.rsplit("page=", 1)[1])]
 
     monkeypatch.setattr(github, "request", request)
     found = rulesets.repo_rulesets("o/r", "tok")
-    assert len(found) == 101
+    assert len(found) == 102
     assert found[-1]["name"] == "other"
 
 
@@ -335,3 +375,42 @@ def test_no_token(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytes
     monkeypatch.setattr(github, "gh_output", fail)
     assert rulesets.main(["check", "--repo", "o/r"]) == 1
     assert capsys.readouterr().err == "gh auth token failed:\nnot logged in\n"
+
+
+def test_tag_rulesets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    gh = FakeGitHub(TAG_RULESET)
+    assert _run(tmp_path, monkeypatch, gh, ["check"], TAG_CONFIG) == 1
+    assert capsys.readouterr().out == (
+        "release-tags-create: missing\n1 of 2 ruleset(s) in o/r need `repoutils rulesets ensure`.\n"
+    )
+    assert _run(tmp_path, monkeypatch, gh, ["ensure"], TAG_CONFIG) == 0
+    [(method, path, body)] = gh.writes
+    assert (method, path) == ("POST", "/repos/o/r/rulesets")
+    assert body == {
+        "name": "release-tags-create",
+        "target": "tag",
+        "enforcement": "active",
+        "conditions": {"ref_name": {"include": ["refs/tags/v*"], "exclude": []}},
+        "bypass_actors": [{"actor_id": None, "actor_type": "DeployKey", "bypass_mode": "always"}],
+        "rules": [{"type": "creation"}],
+    }
+    assert _run(tmp_path, monkeypatch, gh, ["check", "--fail-on-unexpected"], TAG_CONFIG) == 0
+    capsys.readouterr()
+    # dump gives back what pyproject.toml has.
+    assert _run(tmp_path, monkeypatch, gh, ["dump"], "") == 0
+    out = capsys.readouterr().out
+    assert '[tool.repoutils.rulesets.release-tags-create]\ntarget = "tag"\n' in out
+    assert _run(tmp_path, monkeypatch, gh, ["check", "--fail-on-unexpected"], out) == 0
+
+
+def test_target_differs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    config = '[tool.repoutils.rulesets.release-tags-immutable]\ninclude = ["v*"]\n'
+    gh = FakeGitHub(TAG_RULESET)
+    assert _run(tmp_path, monkeypatch, gh, ["check"], config) == 1
+    assert capsys.readouterr().out == (
+        "release-tags-immutable: needs updating:\n"
+        '  target is "tag" on GitHub, not "branch"\n'
+        "  rule deletion is on on GitHub, but pyproject.toml leaves it off\n"
+        "  rule update is on on GitHub, but pyproject.toml leaves it off\n"
+        "1 of 1 ruleset(s) in o/r need `repoutils rulesets ensure`.\n"
+    )
