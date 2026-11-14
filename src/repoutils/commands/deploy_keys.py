@@ -185,13 +185,28 @@ class Status:
             return f"{secret.describe()} was last set before the key was added, so it can't hold its private half"
         return None
 
+    def _duplicates(self) -> str:
+        """What to do about several keys with the title, as a rotation that failed
+        after setting the secret leaves: which to keep, if the secret tells."""
+        by_age = sorted(self.existing, key=lambda found: (datetime.fromisoformat(found["created_at"]), found["id"]))
+        newest, older = by_age[-1], by_age[:-1]
+        ids = ", ".join(str(found["id"]) for found in older)
+        text = f"{len(self.existing)} deploy keys have this title"
+        if self.secret_updated is not None and self.secret_updated >= datetime.fromisoformat(newest["created_at"]):
+            return (
+                f"{text}: its secret was set after the newest (id {newest['id']}), "
+                f"so delete the others on GitHub (id {ids})"
+            )
+        every = ", ".join(str(found["id"]) for found in by_age)
+        return f"{text} (ids {every}, oldest first): delete all but one on GitHub"
+
     def problems(self) -> list[str]:
         if not self.existing:
             # ensure can't create the key until its secret's environment exists, so say so now.
             secret = self.secret_problem() if self.environment_missing else None
             return ["missing"] + ([secret] if secret else [])
         if len(self.existing) > 1:
-            return [f"{len(self.existing)} deploy keys have this title: delete all but one on GitHub"]
+            return [self._duplicates()]
         problems = []
         if self.wrong_access:
             problems.append(f"{_access(not self.key.write)} on GitHub, not {_access(self.key.write)}")
@@ -294,8 +309,19 @@ def replace(repo: str, token: str, key: DeployKey, old: Iterable[dict[str, Any]]
         added = _add(repo, token, key.title, public, key.write)
         try:
             set_secret(repo, token, key.secret, private)
-        except BaseException:
-            _delete(repo, token, added)
+        except BaseException as error:
+            # Report a failed clean-up, but raise the error that caused it.
+            try:
+                _delete(repo, token, added)
+            except Exception as cleanup:
+                print(f"{key.title}: couldn't delete the key just added (id {added['id']}): {cleanup}", file=sys.stderr)
+            if not isinstance(error, subprocess.CalledProcessError):
+                # gh may have set the secret before the interruption, to the private half of the key just deleted.
+                print(
+                    f"{key.title}: interrupted while setting {key.secret.describe()}, which may now hold no key's "
+                    f"private half: run `repoutils deploy-keys ensure --rotate {config.toml_key(key.title)}`",
+                    file=sys.stderr,
+                )
             raise
     for found in old:
         _delete(repo, token, found)

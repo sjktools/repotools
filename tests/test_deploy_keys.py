@@ -56,6 +56,7 @@ class FakeGitHub:
         self.secrets = dict(secrets or {})
         self.environments = environments
         self.fail_add = fail_add
+        self.fail_delete = False
         self.next_id = 100
         self.calls: list[tuple[str, str, Any]] = []
 
@@ -87,6 +88,8 @@ class FakeGitHub:
             return added
         if parts[0] == "keys":
             assert method == "DELETE"
+            if self.fail_delete:
+                raise urllib.error.HTTPError(url, 500, "Error", Message(), io.BytesIO(b""))
             self.keys = [key for key in self.keys if key["id"] != int(parts[1])]
             return None
         if parts == ["environments"]:
@@ -240,7 +243,7 @@ def test_check_secret_and_environment_missing(
     assert capsys.readouterr().out.splitlines()[:3] == [
         "release: environment release, which holds its secret RELEASE_DEPLOY_KEY, is missing",
         "docs: secret DOCS_KEY is missing",
-        "x: 2 deploy keys have this title: delete all but one on GitHub",
+        "x: 2 deploy keys have this title (ids 3, 4, oldest first): delete all but one on GitHub",
     ]
     # A missing key says its environment is missing too, which stops ensure creating it.
     assert _run(tmp_path, monkeypatch, FakeGitHub([], environments=()), ["check"]) == 1
@@ -519,3 +522,46 @@ def test_same_secret_name_elsewhere(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert _run(tmp_path, monkeypatch, gh, ["check"], config) == 0
     # The environments are listed once, for both keys.
     assert sum(url.startswith(f"{API}/environments?") for _, url, _ in gh.calls) == 1
+
+
+def test_duplicates_after_failed_rotation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The old key couldn't be deleted after the secret was set to the new key's private half.
+    gh = FakeGitHub([_key(9, "docs", created=NEW), _key(2, "docs")], {(None, "DOCS_KEY"): "2026-03-01T00:00:00Z"})
+    config = '[tool.repoutils.deploy-keys.docs]\nsecret = { name = "DOCS_KEY" }\n'
+    assert _run(tmp_path, monkeypatch, gh, ["check"], config) == 1
+    assert capsys.readouterr().out.splitlines()[0] == (
+        "docs: 2 deploy keys have this title: its secret was set after the newest (id 9), "
+        "so delete the others on GitHub (id 2)"
+    )
+
+
+@pytest.mark.parametrize("delete_fails", [False, True])
+def test_interrupted_secret_step(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], delete_fails: bool
+) -> None:
+    gh = _matching()
+    tools = FakeTools(gh)
+
+    def interrupted(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[Any]:
+        if command[0] == "gh":
+            if delete_fails:
+                gh.fail_delete = True
+            raise KeyboardInterrupt
+        return tools(command, **kwargs)
+
+    (tmp_path / "pyproject.toml").write_text(CONFIG)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(github, "request", gh)
+    monkeypatch.setattr(shutil, "which", lambda tool: f"/usr/bin/{tool}")
+    monkeypatch.setattr(subprocess, "run", interrupted)
+    # The interruption, not a failed clean-up, is what's raised.
+    with pytest.raises(KeyboardInterrupt):
+        deploy_keys.main(["ensure", "--rotate", "release", "--repo", "o/r"])
+    err = capsys.readouterr().err
+    assert "release: interrupted while setting environment release secret RELEASE_DEPLOY_KEY" in err
+    assert "`repoutils deploy-keys ensure --rotate release`" in err
+    assert ("couldn't delete the key just added (id 101)" in err) == delete_fails
+    assert [key["id"] for key in gh.keys] == ([1, 2, 3, 101] if delete_fails else [1, 2, 3])
