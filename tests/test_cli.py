@@ -15,6 +15,7 @@ import pytest
 
 from repoutils import cli, github
 from repoutils.commands import actions_settings
+from repoutils.commands.deploy_keys import DeployKey, Secret, load_deploy_keys
 from repoutils.commands.environments import load_environments
 from repoutils.commands.labels import load_labels
 from repoutils.commands.repo_settings import load_settings
@@ -351,6 +352,12 @@ def test_deploy_keys(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: py
     monkeypatch.chdir(tmp_path)
     assert cli.main(["deploy-keys", "check"]) == 1
     assert "No deploy keys are declared" in capsys.readouterr().err
+
+
+def test_this_repos_deploy_keys_load() -> None:
+    # The release job's tag-pushing key, whose private half only the release environment holds.
+    assert load_deploy_keys(ROOT) == [DeployKey("release", True, Secret("RELEASE_DEPLOY_KEY", "release"))]
+    assert "release" in {environment.name for environment in load_environments(ROOT)}
 
 
 def test_rulesets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
