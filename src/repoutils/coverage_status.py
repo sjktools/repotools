@@ -30,6 +30,11 @@ from repoutils import config, github
 
 DEFAULT_PROJECT_STATUS = "coverage/project"
 DEFAULT_PATCH_STATUS = "coverage/patch"
+# The points project coverage may fall, and patch coverage may sit below the
+# base's project coverage, before the patch coverage comment warns: what the
+# thresholds in repoutils' codecov.yml allowed.
+DEFAULT_WARN_PROJECT_DROP = 2.0
+DEFAULT_WARN_PATCH_BELOW = 1.0
 NO_PATCH_LINES = "no changed lines to cover"
 
 _DESCRIPTION_RE = re.compile(
@@ -59,7 +64,7 @@ class Totals:
 
     def percent_text(self) -> str:
         """percent to two decimal places, cut rather than rounded."""
-        return _points(self.hundredths())
+        return points(self.hundredths())
 
     def description(self) -> str:
         """The status description, e.g. ``96.52% (2114/2172 lines, 610/650 branches)``."""
@@ -69,7 +74,8 @@ class Totals:
         return f"{self.percent_text()}% ({counts})"
 
 
-def _points(hundredths: int) -> str:
+def points(hundredths: int) -> str:
+    """hundredths of a point as points to two decimal places, e.g. ``1.05``."""
     return f"{hundredths // 100}.{hundredths % 100:02d}"
 
 
@@ -81,7 +87,7 @@ def project_description(totals: Totals, base: Totals | None = None, base_sha: st
         return totals.description()
     change = totals.hundredths() - base.hundredths()
     sign = "-" if change < 0 else "+"
-    return f"{totals.description()}, {sign}{_points(abs(change))} points from {base_sha[:7]}"
+    return f"{totals.description()}, {sign}{points(abs(change))} points from {base_sha[:7]}"
 
 
 def patch_description(totals: Totals) -> str:
@@ -187,6 +193,19 @@ def status_names(root: Path = Path()) -> tuple[str, str]:
     if project.casefold() == patch.casefold():
         raise config.ConfigError("[tool.repoutils.coverage] project-status and patch-status must differ")
     return project, patch
+
+
+def warning_limits(root: Path = Path()) -> tuple[float | None, float | None]:
+    """The points project coverage may fall from the base's, and patch
+    coverage may sit below the base's project coverage, before the patch
+    coverage comment warns (``[tool.repoutils.coverage]`` ``warn-project-drop``
+    and ``warn-patch-below``, default 2 and 1), each None if set to false."""
+    table = config.section("coverage", root)
+    where = "[tool.repoutils.coverage]"
+    return (
+        config.optional_number(table, "warn-project-drop", DEFAULT_WARN_PROJECT_DROP, where),
+        config.optional_number(table, "warn-patch-below", DEFAULT_WARN_PATCH_BELOW, where),
+    )
 
 
 def post_status(repo: str, sha: str, name: str, description: str, token: str, target_url: str | None = None) -> None:

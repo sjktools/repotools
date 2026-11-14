@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from repoutils import cli
+from repoutils import cli, github
 from repoutils.commands import actions_settings
 from repoutils.commands.environments import load_environments
 from repoutils.commands.labels import load_labels
@@ -203,6 +203,12 @@ def test_comment_posters(
             "[tool.repoutils.coverage] project-status must be a non-empty string of 255 characters at most",
             False,
         ),
+        (
+            ["wait-for-base-coverage", "o/r", "abc"],
+            "[tool.repoutils.coverage]\nproject-status = 3\n",
+            "[tool.repoutils.coverage] project-status must be a non-empty string of 255 characters at most",
+            False,
+        ),
     ],
 )
 def test_bad_pyproject_setting_prints_one_line_error(
@@ -234,6 +240,7 @@ def test_bad_pyproject_setting_prints_one_line_error(
         (["post-patch-coverage", "1"], False),
         (["post-screenshots", "1"], False),
         (["post-coverage-status", "0" * 40], False),
+        (["wait-for-base-coverage", "o/r", "abc"], False),
         # These read other tables of pyproject.toml, not [tool.repoutils].
         (["check-pins"], False),
         (["requirements-min-versions", "check"], True),
@@ -396,11 +403,15 @@ class _Response(io.BytesIO):
     status = 200
 
 
-def test_wait_for_base_coverage(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+def test_wait_for_base_coverage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
     def urlopen(request: urllib.request.Request, **kwargs: Any) -> _Response:
-        assert request.full_url.startswith("https://api.codecov.io/")
-        return _Response(json.dumps({"totals": {"coverage": 98.5}}).encode())
+        assert request.full_url.startswith("https://api.github.com/repos/o/r/commits/abc/status?")
+        statuses = [{"context": "coverage/project", "description": "98.50% (197/200 lines)"}]
+        return _Response(json.dumps({"statuses": statuses}).encode())
 
-    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(github.no_redirect_opener, "open", urlopen)
     assert cli.main(["wait-for-base-coverage", "o/r", "abc"]) == 0
-    assert "Codecov has the base report for abc (coverage 98.5%)" in capsys.readouterr().out
+    assert "base commit abc has its coverage/project status (98.50% (197/200 lines))" in capsys.readouterr().out
