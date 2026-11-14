@@ -28,6 +28,7 @@ undeclared read-only keys too.
 
 import argparse
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -193,9 +194,10 @@ class Status:
         ids = ", ".join(str(found["id"]) for found in older)
         text = f"{len(self.existing)} deploy keys have this title"
         if self.secret_updated is not None and self.secret_updated >= datetime.fromisoformat(newest["created_at"]):
+            # The times can't show which private half the secret holds, only that it can be the newest's.
             return (
-                f"{text}: its secret was set after the newest (id {newest['id']}), "
-                f"so delete the others on GitHub (id {ids})"
+                f"{text}: its secret was set after the newest (id {newest['id']}), so if it holds that key's "
+                f"private half, delete the others on GitHub (id {ids}); if unsure, delete them all and run ensure"
             )
         every = ", ".join(str(found["id"]) for found in by_age)
         return f"{text} (ids {every}, oldest first): delete all but one on GitHub"
@@ -311,17 +313,24 @@ def replace(repo: str, token: str, key: DeployKey, old: Iterable[dict[str, Any]]
             set_secret(repo, token, key.secret, private)
         except BaseException as error:
             # Report a failed clean-up, but raise the error that caused it.
+            cleaned = True
             try:
                 _delete(repo, token, added)
             except Exception as cleanup:
                 if isinstance(cleanup, urllib.error.HTTPError):
                     cleanup.close()
-                print(f"{key.title}: couldn't delete the key just added (id {added['id']}): {cleanup}", file=sys.stderr)
+                cleaned = False
+                print(
+                    f"{key.title}: couldn't delete the key just added (id {added['id']}): {cleanup}: "
+                    "delete it on GitHub",
+                    file=sys.stderr,
+                )
             if not isinstance(error, subprocess.CalledProcessError):
-                # gh may have set the secret before the interruption, to the private half of the key just deleted.
+                # gh may have set the secret before the interruption, to the new key's private half.
+                then = "" if cleaned else f"once key id {added['id']} is deleted, "
                 print(
                     f"{key.title}: interrupted while setting {key.secret.describe()}, which may now hold no key's "
-                    f"private half: run `repoutils deploy-keys ensure --rotate {config.toml_key(key.title)}`",
+                    f"private half: {then}run `repoutils deploy-keys ensure --rotate {shlex.quote(key.title)}`",
                     file=sys.stderr,
                 )
             raise
@@ -352,7 +361,7 @@ def _preflight(results: Sequence[Status], rotate: set[str]) -> list[str]:
             errors.append(f"{key.title}: {status.secret_problem()}: create it with `repoutils environments ensure`")
         elif not _replacing(status, rotate) and status.secret_problem():
             errors.append(
-                f"{key.title}: {status.secret_problem()}: replace the key with `--rotate {config.toml_key(key.title)}`"
+                f"{key.title}: {status.secret_problem()}: replace the key with `--rotate {shlex.quote(key.title)}`"
             )
     return errors
 

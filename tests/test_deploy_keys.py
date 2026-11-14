@@ -379,6 +379,13 @@ def test_ensure_removes_key_when_secret_fails(
             T + "secret = { name = 'S' }\n",
             "k: secret S is missing: replace the key with `--rotate k`",
         ),
+        (
+            # Quoted for a shell, to paste.
+            FakeGitHub([_key(1, "$(id) x")]),
+            [],
+            "[tool.repoutils.deploy-keys.'$(id) x']\nsecret = { name = 'S' }\n",
+            "replace the key with `--rotate '$(id) x'`",
+        ),
     ],
 )
 def test_ensure_refuses(
@@ -532,8 +539,8 @@ def test_duplicates_after_failed_rotation(
     config = '[tool.repoutils.deploy-keys.docs]\nsecret = { name = "DOCS_KEY" }\n'
     assert _run(tmp_path, monkeypatch, gh, ["check"], config) == 1
     assert capsys.readouterr().out.splitlines()[0] == (
-        "docs: 2 deploy keys have this title: its secret was set after the newest (id 9), "
-        "so delete the others on GitHub (id 2)"
+        "docs: 2 deploy keys have this title: its secret was set after the newest (id 9), so if it holds that "
+        "key's private half, delete the others on GitHub (id 2); if unsure, delete them all and run ensure"
     )
 
 
@@ -564,4 +571,5 @@ def test_interrupted_secret_step(
     assert "release: interrupted while setting environment release secret RELEASE_DEPLOY_KEY" in err
     assert "`repoutils deploy-keys ensure --rotate release`" in err
     assert ("couldn't delete the key just added (id 101)" in err) == delete_fails
+    assert ("once key id 101 is deleted, run" in err) == delete_fails
     assert [key["id"] for key in gh.keys] == ([1, 2, 3, 101] if delete_fails else [1, 2, 3])
