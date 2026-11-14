@@ -110,6 +110,8 @@ Two comments act on an open PR from this repository, when the comment is just th
 The commenter's author association must be `OWNER` or `MEMBER`, so outside collaborators and contributors can't use them.
 `/testpypi` publishes a dev build of the PR's branch to TestPyPI only.
 `/autofix` runs `just fix` on the PR's branch and pushes the result (with the `AUTOFIX_TOKEN` secret).
+It dispatches `fix.yml` from `main` with the branch as an input, so the branch's own copy of the workflow never runs.
+`AUTOFIX_TOKEN` lives in the `autofix` environment, which only `main` can deploy to, apart from the release secrets.
 
 `claude.yml` and `claude-code-review.yml` run Claude Code when a comment starts with `@claude` (with the `CLAUDE_CODE_OAUTH_TOKEN` secret).
 Their `route` jobs run `repoutils claude-route` from a sparse checkout of `src/repoutils/` with the runner's `python3`, installing nothing.

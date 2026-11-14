@@ -1,8 +1,10 @@
 name: PR Fixes on comment
 
 # A PR comment from the repo owner (or, in an organization, a member) that is
-# just `/autofix` (whitespace aside) runs the PR Fixes workflow (fix.yml) on
-# the PR's branch, as running it by hand would. This runs no code from the branch.
+# just `/autofix` (whitespace aside) runs the PR Fixes workflow (fix.yml) from
+# the default branch on the PR's branch, as running it by hand would. This runs
+# no code from the branch, and neither does the dispatch: fix.yml runs main's
+# copy of itself, which checks the branch again before using it.
 on:
   issue_comment:
     types: [created]
@@ -41,12 +43,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NUMBER: ${{ github.event.issue.number }}
           COMMENT_ID: ${{ github.event.comment.id }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           # Not read from a process substitution, whose failure wouldn't stop the step.
           pr=$(gh pr view "$NUMBER" --repo "$GITHUB_REPOSITORY" \
-            --json state,isCrossRepository,headRefName \
-            --jq '"\(.state) \(.isCrossRepository) \(.headRefName)"')
-          read -r state cross_repo branch <<< "$pr"
+            --json state,isCrossRepository,headRefName,headRefOid \
+            --jq '"\(.state) \(.isCrossRepository) \(.headRefOid) \(.headRefName)"')
+          read -r state cross_repo head_sha branch <<< "$pr"
           if [ "$state" != OPEN ]; then
             echo "::error::Pull request #$NUMBER is not open."
             exit 1
@@ -55,7 +58,14 @@ jobs:
             echo "::error::Pull request #$NUMBER is from a fork, which PR Fixes can't push to."
             exit 1
           fi
-          gh workflow run fix.yml --repo "$GITHUB_REPOSITORY" --ref "$branch"
+          if [ "$branch" = "$DEFAULT_BRANCH" ]; then
+            echo "::error::Pull request #$NUMBER's branch is $DEFAULT_BRANCH, which PR Fixes doesn't push to."
+            exit 1
+          fi
+          # The head SHA makes PR Fixes fail if the branch moves on before it
+          # starts, rather than fix commits pushed after the comment.
+          gh workflow run fix.yml --repo "$GITHUB_REPOSITORY" --ref "$DEFAULT_BRANCH" \
+            -f branch="$branch" -f head-sha="$head_sha"
           # PR Fixes has started, so a failed reaction only warns: a red run would
           # suggest commenting again.
           if ! gh api --method POST "repos/$GITHUB_REPOSITORY/issues/comments/$COMMENT_ID/reactions" \
