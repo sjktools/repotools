@@ -108,8 +108,15 @@ push-protection = true
 actions = ["AUTOFIX_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "GH_ACTIONS_TOKEN"]
 dependabot = ["DEPENDABOT_FIX_TOKEN"]
 
-# The deployment environments `repoutils environments` checks or creates:
-# publish-pypi.yml's. Only a v* tag (a release) may deploy to pypi, so a run of
+# The deployment environments `repoutils environments` checks or creates.
+# Only main can deploy to release, which holds the secrets that can tag a
+# release or push a branch (ci.yml's release job and bump-version.yml), so a
+# branch's own copy of a workflow can't read them.
+[tool.repoutils.environments.release]
+deployment-branches = "selected"
+allowed-branches = ["main"]
+
+# publish-pypi.yml's environments. Only a v* tag (a release) may deploy to pypi, so a run of
 # a PR branch's copy of the workflow (which /testpypi dispatches) can't publish
 # to PyPI through trusted publishing; testpypi stays open for /testpypi.
 [tool.repoutils.environments.pypi]
@@ -119,6 +126,14 @@ allowed-tags = ["v*"]
 
 [tool.repoutils.environments.testpypi]
 deployment-branches = "all"
+
+# The deploy keys `repoutils deploy-keys` checks or creates. ci.yml's release
+# job pushes v* tags with release's private half, which only the release
+# environment holds; the release-tags-create ruleset lets only deploy keys
+# create a v* tag.
+[tool.repoutils.deploy-keys.release]
+write = true
+secret = { environment = "release", name = "RELEASE_DEPLOY_KEY" }
 
 # The rulesets `repoutils rulesets` checks or creates, each giving only
 # what differs from a new ruleset's defaults. main changes only by a squash-merged
