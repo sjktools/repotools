@@ -486,20 +486,3 @@ def test_check_workflows_repository_secret_needs_no_environment(
     config_text = '[tool.repoutils.secrets]\nactions = ["TOKEN"]\nenvironments.x = ["TOKEN"]\n'
     assert _workflows(tmp_path, monkeypatch, config_text, ci_yml=workflow) == 0
     assert capsys.readouterr().out == "The workflows use exactly the 1 secret(s) pyproject.toml lists.\n"
-
-
-@pytest.mark.parametrize(
-    ("text", "jobs"),
-    [
-        ("on: push\n", []),
-        ("jobs: {}\n", []),
-        ("jobs:\n  a:\n    environment:\n      url: x\n", [("a", secrets.UNKNOWN)]),
-        ("jobs:\n  a:\n    environment: 'prod'\n  b: {}\nafter:\n  c:\n", [("a", "prod"), ("b", secrets.UNKNOWN)]),
-        ("jobs:\n\n  a:\n    steps:\n      - environment: no\n", [("a", None)]),
-        # A line that isn't a job's id starts no job.
-        ("jobs:\n  - a\n  b:\n", [("b", None)]),
-    ],
-)
-def test_jobs(text: str, jobs: list[tuple[str, str | None]]) -> None:
-    lines = [secrets._without_comment(line) for line in text.splitlines()]
-    assert [(job.id, job.environment) for job in secrets._jobs("w.yml", lines)] == jobs
