@@ -400,8 +400,8 @@ def main(argv: list[str]) -> int:
         prog="repoutils deploy-keys",
         description=__doc__.split("\n\n")[0].replace("\n", " "),
         epilog="Uses $GITHUB_TOKEN, defaulting to `gh auth token`. It needs the Administration permission "
-        "(write for ensure), and read for Secrets, and for Actions and Environments if a secret is an environment's. "
-        "ensure also needs write for those to set a secret.",
+        "(write for ensure). A repository secret needs Secrets (write for ensure); an environment's secret "
+        "needs Environments (write for ensure) and Actions read.",
     )
     subparsers = parser.add_subparsers(dest="mode", required=True, metavar="{check,ensure,dump}")
     check_parser = subparsers.add_parser(
