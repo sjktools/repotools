@@ -1,53 +1,106 @@
 name: PR Fixes
 
-# Run by hand (Actions → PR Fixes → Run workflow) on an open PR's branch:
-# merges the PR's base branch in, runs `just fix`, and pushes the result.
-# autofix-comment.yml also runs it when the owner comments `/autofix` on a PR.
+# Merges an open PR's base branch into its branch, runs `just fix`, and pushes
+# the result. Run it from main (Actions → PR Fixes → Run workflow, with Use
+# workflow from: main), naming the PR's branch. autofix-comment.yml also runs it
+# when the owner comments `/autofix` on a PR.
+#
+# It always runs main's copy of this workflow, never the branch's, and pushes
+# with AUTOFIX_TOKEN from the autofix environment, which only main can deploy
+# to. So a branch can neither add a step to the job holding the token nor read
+# the token from a workflow of its own (see #24).
 on:
   workflow_dispatch:
+    inputs:
+      branch:
+        description: The head branch of an open pull request in this repository
+        required: true
+        type: string
+      head-sha:
+        description: >-
+          The commit the branch is expected to be at (optional): the run fails
+          if the branch has moved on, rather than fix commits nobody looked at
+        required: false
+        type: string
 
 concurrency:
-  group: fix-${{ github.ref }}
+  group: fix-${{ inputs.branch }}
 
 jobs:
-  # Runs the branch's own justfile and dev dependencies (on a Dependabot PR,
-  # at their bumped, untrusted versions), so this job never references
-  # AUTOFIX_TOKEN: a runner gets every secret its job uses, and code from an
-  # earlier step could read it from a later one. It hands its commits to the
-  # push job as a Git bundle instead.
-  fix:
+  # Checks the branch names an open PR's head branch in this repository and
+  # finds the commit to start from. It runs no code from the branch, so the
+  # push job can trust its outputs, unlike the fix job's.
+  resolve:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
       pull-requests: read
-    timeout-minutes: 10
+    timeout-minutes: 5
     outputs:
-      head: ${{ steps.commit.outputs.head }}
+      branch: ${{ steps.check-pr.outputs.branch }}
+      base_branch: ${{ steps.check-pr.outputs.base_branch }}
+      start_sha: ${{ steps.check-pr.outputs.start_sha }}
 
     steps:
       - name: Find the branch's pull request
         id: check-pr
         env:
           GH_TOKEN: ${{ github.token }}
-          BRANCH: ${{ github.ref_name }}
+          BRANCH: ${{ inputs.branch }}
+          EXPECTED_SHA: ${{ inputs.head-sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          if [ "$GITHUB_REF_TYPE" != branch ]; then
-            echo "::error::This workflow must be run on a pull request branch, not a $GITHUB_REF_TYPE."
+          if [ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
+            echo "::error::Run this workflow from $DEFAULT_BRANCH, naming the pull request's branch as an input, not from $GITHUB_REF."
             exit 1
           fi
-          base_branch=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open \
-            --json baseRefName,isCrossRepository \
-            --jq '[.[] | select(.isCrossRepository | not)][0].baseRefName // empty')
-          if [ -z "$base_branch" ]; then
+          if ! git check-ref-format --branch "$BRANCH" > /dev/null 2>&1 || [[ $BRANCH == -* ]]; then
+            echo "::error::$BRANCH isn't a valid branch name."
+            exit 1
+          fi
+          if [ "$BRANCH" = "$DEFAULT_BRANCH" ]; then
+            echo "::error::PR Fixes doesn't push to $DEFAULT_BRANCH."
+            exit 1
+          fi
+          # A fork's PR can have a head branch of the same name, so only PRs
+          # from this repository count.
+          pr=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$BRANCH" --state open \
+            --json baseRefName,headRefOid,isCrossRepository \
+            --jq '[.[] | select(.isCrossRepository | not)][0] // empty | "\(.baseRefName) \(.headRefOid)"')
+          if [ -z "$pr" ]; then
             echo "::error::Branch $BRANCH has no open pull request in this repository."
             exit 1
           fi
-          echo "base_branch=$base_branch" >> "$GITHUB_OUTPUT"
+          read -r base_branch start_sha <<< "$pr"
+          if [ -n "$EXPECTED_SHA" ] && [ "$EXPECTED_SHA" != "$start_sha" ]; then
+            echo "::error::Branch $BRANCH is at $start_sha, not $EXPECTED_SHA as expected; it has moved on, so run PR Fixes again."
+            exit 1
+          fi
+          {
+            echo "branch=$BRANCH"
+            echo "base_branch=$base_branch"
+            echo "start_sha=$start_sha"
+          } >> "$GITHUB_OUTPUT"
 
+  # Runs the branch's own justfile and dev dependencies (on a Dependabot PR,
+  # at their bumped, untrusted versions), so this job never references
+  # AUTOFIX_TOKEN: a runner gets every secret its job uses, and code from an
+  # earlier step could read it from a later one. It hands its commits to the
+  # push job as a Git bundle instead.
+  fix:
+    needs: resolve
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    outputs:
+      head: ${{ steps.commit.outputs.head }}
+
+    steps:
       # No credentials are kept, as the steps after this run the branch's own
       # justfile and dependencies.
       - uses: actions/checkout@v7.0.1
         with:
+          ref: ${{ needs.resolve.outputs.start_sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -58,7 +111,7 @@ jobs:
 
       - name: Merge base branch
         env:
-          BASE_BRANCH: ${{ steps.check-pr.outputs.base_branch }}
+          BASE_BRANCH: ${{ needs.resolve.outputs.base_branch }}
         run: |
           if ! git merge "origin/$BASE_BRANCH" --no-edit; then
             echo "::error::Merge conflict with base branch $BASE_BRANCH. Please resolve conflicts manually."
@@ -86,6 +139,8 @@ jobs:
       # Bundles the merge commit even if `just fix` changed nothing.
       - name: Commit changes
         id: commit
+        env:
+          START_SHA: ${{ needs.resolve.outputs.start_sha }}
         run: |
           git add -u
           if git diff --staged --quiet; then
@@ -93,10 +148,10 @@ jobs:
           else
             git commit -m "chore: apply automated fixes"
           fi
-          if [ "$(git rev-parse HEAD)" = "$GITHUB_SHA" ]; then
+          if [ "$(git rev-parse HEAD)" = "$START_SHA" ]; then
             echo "Branch is up to date and needs no fixes"
           else
-            git bundle create "$RUNNER_TEMP/fixes.bundle" "$GITHUB_SHA..HEAD"
+            git bundle create "$RUNNER_TEMP/fixes.bundle" "$START_SHA..HEAD"
             echo "head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           fi
 
@@ -110,12 +165,16 @@ jobs:
 
   # A fresh runner that runs no code from the branch: it checks out the commit
   # the fix job started from, fetches the bundled commits onto it and pushes
-  # them. AUTOFIX_TOKEN needs only contents write, without the workflows
-  # permission, so a bundle can't change the workflows either.
+  # them. It takes the branch and that commit from the resolve job, not the fix
+  # job, whose outputs the branch's code could set. AUTOFIX_TOKEN needs only
+  # contents write, without the workflows permission, so a bundle can't change
+  # the workflows either. It's in the autofix environment, which only main can
+  # deploy to, so a branch's own copy of a workflow can't read it.
   push:
-    needs: fix
+    needs: [resolve, fix]
     if: needs.fix.outputs.head
     runs-on: ubuntu-latest
+    environment: autofix
     permissions:
       contents: read
     timeout-minutes: 5
@@ -135,6 +194,7 @@ jobs:
       # may be far back in this branch's history.
       - uses: actions/checkout@v7.0.1
         with:
+          ref: ${{ needs.resolve.outputs.start_sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -152,7 +212,8 @@ jobs:
       - name: Push the fixes
         env:
           AUTOFIX_TOKEN: ${{ secrets.AUTOFIX_TOKEN }}
-          BRANCH: ${{ github.ref_name }}
+          BRANCH: ${{ needs.resolve.outputs.branch }}
+          START_SHA: ${{ needs.resolve.outputs.start_sha }}
           HEAD_SHA: ${{ needs.fix.outputs.head }}
         run: |
           bundle="$RUNNER_TEMP/fixes/fixes.bundle"
@@ -163,11 +224,11 @@ jobs:
             exit 1
           fi
           # The lease makes the push a forced one, so check it only adds commits.
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" "$HEAD_SHA"; then
+          if ! git merge-base --is-ancestor "$START_SHA" "$HEAD_SHA"; then
             echo "::error::The bundle's head doesn't descend from the commit the fix job started from."
             exit 1
           fi
           git -c core.hooksPath=/dev/null push \
-            "--force-with-lease=refs/heads/${BRANCH}:${GITHUB_SHA}" \
+            "--force-with-lease=refs/heads/${BRANCH}:${START_SHA}" \
             "https://x-access-token:${AUTOFIX_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
             "${HEAD_SHA}:refs/heads/${BRANCH}"

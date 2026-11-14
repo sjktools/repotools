@@ -108,17 +108,27 @@ immutable-releases = true
 
 # The secrets `repoutils secrets` checks the repository has (see AGENTS.md).
 [tool.repoutils.secrets]
-actions = ["AUTOFIX_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"]
+actions = ["CLAUDE_CODE_OAUTH_TOKEN"]
 dependabot = ["DEPENDABOT_FIX_TOKEN"]
 # Only main's workflows can reach these: ci.yml's release job pushes v* tags
 # with the deploy key, and bump-version.yml uses GH_ACTIONS_TOKEN.
 environments.release = ["GH_ACTIONS_TOKEN", "RELEASE_DEPLOY_KEY"]
+# fix.yml's push job pushes /autofix's commits to a PR's branch with this.
+environments.autofix = ["AUTOFIX_TOKEN"]
 
 # The deployment environments `repoutils environments` checks or creates.
 # Only main can deploy to release, which holds the secrets that can tag a
 # release or push a branch (ci.yml's release job and bump-version.yml), so a
 # branch's own copy of a workflow can't read them.
 [tool.repoutils.environments.release]
+deployment-branches = "selected"
+allowed-branches = ["main"]
+allowed-tags = []
+
+# Only main can deploy to autofix either, which holds AUTOFIX_TOKEN for
+# fix.yml's push job. It's apart from release, so the job that pushes a PR's
+# branch can't read the release deploy key.
+[tool.repoutils.environments.autofix]
 deployment-branches = "selected"
 allowed-branches = ["main"]
 allowed-tags = []
